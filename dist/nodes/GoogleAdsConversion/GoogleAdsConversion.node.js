@@ -1035,7 +1035,7 @@ class GoogleAdsConversion {
             validateOnly: validateOnly,
         };
         if (debugMode) {
-            executeFunctions.logger.debug('Google Ads Conversion API Request Payload:', JSON.stringify(requestPayload, null, 2));
+            executeFunctions.logger.debug('Google Ads Conversion API Request Payload:', { payload: requestPayload });
         }
         return await this.executeWithRetry(executeFunctions, async () => {
             // Make the API call
@@ -1046,7 +1046,7 @@ class GoogleAdsConversion {
                 headers: await this.getAuthenticatedHeaders(executeFunctions),
             });
             if (debugMode) {
-                executeFunctions.logger.debug('Google Ads Conversion API Response:', JSON.stringify(response, null, 2));
+                executeFunctions.logger.debug('Google Ads Conversion API Response:', { response });
             }
             return response;
         }, `Conversion Upload (Item ${itemIndex + 1})`, debugMode);
@@ -1079,7 +1079,7 @@ class GoogleAdsConversion {
             validateOnly: validateOnly,
         };
         if (debugMode) {
-            executeFunctions.logger.debug(`Batch ${batchIndex + 1} Request Payload:`, JSON.stringify(requestPayload, null, 2));
+            executeFunctions.logger.debug(`Batch ${batchIndex + 1} Request Payload:`, { payload: requestPayload });
         }
         return await this.executeWithRetry(executeFunctions, async () => {
             // Make the batch API call
@@ -1090,7 +1090,7 @@ class GoogleAdsConversion {
                 headers: await this.getAuthenticatedHeaders(executeFunctions),
             });
             if (debugMode) {
-                executeFunctions.logger.debug(`Batch ${batchIndex + 1} Response:`, JSON.stringify(response, null, 2));
+                executeFunctions.logger.debug(`Batch ${batchIndex + 1} Response:`, { response });
             }
             return response;
         }, `Batch ${batchIndex + 1}/${totalBatches} Upload`, debugMode);
@@ -1338,23 +1338,9 @@ class GoogleAdsConversion {
     }
     async execute() {
         const items = this.getInputData();
-        // Get authenticated headers once for all requests
-        let authenticatedHeaders;
-        try {
-            authenticatedHeaders = await this.getAuthenticatedHeaders(this);
-        }
-        catch (error) {
-            throw error; // Already properly categorized by getAuthenticatedHeaders
-        }
-        // Validate credentials (only once per execution)
-        try {
-            await this.validateCredentials(this, authenticatedHeaders);
-        }
-        catch (error) {
-            throw error; // Already properly categorized by validateCredentials
-        }
-        // Process items using batch processing or individual processing
-        const returnData = await this.processBatchItems(this, items);
+        // Process items using batch processing or individual processing  
+        const googleAdsConversion = new GoogleAdsConversion();
+        const returnData = await googleAdsConversion.processBatchItems(this, items);
         return [returnData];
     }
 }

@@ -1206,7 +1206,7 @@ export class GoogleAdsConversion implements INodeType {
 		};
 
 		if (debugMode) {
-			executeFunctions.logger.debug('Google Ads Conversion API Request Payload:', JSON.stringify(requestPayload, null, 2));
+			executeFunctions.logger.debug('Google Ads Conversion API Request Payload:', { payload: requestPayload });
 		}
 
 		return await this.executeWithRetry(
@@ -1225,7 +1225,7 @@ export class GoogleAdsConversion implements INodeType {
 				);
 
 				if (debugMode) {
-					executeFunctions.logger.debug('Google Ads Conversion API Response:', JSON.stringify(response, null, 2));
+					executeFunctions.logger.debug('Google Ads Conversion API Response:', { response });
 				}
 
 				return response;
@@ -1275,7 +1275,7 @@ export class GoogleAdsConversion implements INodeType {
 		};
 
 		if (debugMode) {
-			executeFunctions.logger.debug(`Batch ${batchIndex + 1} Request Payload:`, JSON.stringify(requestPayload, null, 2));
+			executeFunctions.logger.debug(`Batch ${batchIndex + 1} Request Payload:`, { payload: requestPayload });
 		}
 
 		return await this.executeWithRetry(
@@ -1294,7 +1294,7 @@ export class GoogleAdsConversion implements INodeType {
 				);
 
 				if (debugMode) {
-					executeFunctions.logger.debug(`Batch ${batchIndex + 1} Response:`, JSON.stringify(response, null, 2));
+					executeFunctions.logger.debug(`Batch ${batchIndex + 1} Response:`, { response });
 				}
 
 				return response;
@@ -1618,23 +1618,9 @@ export class GoogleAdsConversion implements INodeType {
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
 
-		// Get authenticated headers once for all requests
-		let authenticatedHeaders: Record<string, string>;
-		try {
-			authenticatedHeaders = await this.getAuthenticatedHeaders(this);
-		} catch (error) {
-			throw error; // Already properly categorized by getAuthenticatedHeaders
-		}
-
-		// Validate credentials (only once per execution)
-		try {
-			await this.validateCredentials(this, authenticatedHeaders);
-		} catch (error) {
-			throw error; // Already properly categorized by validateCredentials
-		}
-
-		// Process items using batch processing or individual processing
-		const returnData = await this.processBatchItems(this, items);
+		// Process items using batch processing or individual processing  
+		const googleAdsConversion = new GoogleAdsConversion();
+		const returnData = await googleAdsConversion.processBatchItems(this, items);
 
 		return [returnData];
 	}
