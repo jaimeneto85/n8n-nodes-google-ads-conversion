@@ -68,7 +68,7 @@ export class GoogleAdsConversion implements INodeType {
 			},
 		],
 		requestDefaults: {
-			baseURL: 'https://googleads.googleapis.com/v14',
+			baseURL: 'https://googleads.googleapis.com/v17',
 			headers: {
 				'Accept': 'application/json',
 				'Content-Type': 'application/json',
@@ -599,47 +599,6 @@ export class GoogleAdsConversion implements INodeType {
 	};
 
 	/**
-	 * Convert n8n DateTime objects or strings to ISO string format
-	 */
-	private convertDateTimeToString(dateTimeValue: any): string {
-		if (!dateTimeValue) {
-			return '';
-		}
-
-		// Handle n8n DateTime objects
-		if (typeof dateTimeValue === 'object') {
-			// Check if it's a Date object
-			if (dateTimeValue instanceof Date) {
-				return dateTimeValue.toISOString();
-			}
-			// Check if it has a toString method (n8n DateTime objects)
-			if (dateTimeValue.toString && typeof dateTimeValue.toString === 'function') {
-				return dateTimeValue.toString();
-			}
-			// Check if it has toISOString method
-			if (dateTimeValue.toISOString && typeof dateTimeValue.toISOString === 'function') {
-				return dateTimeValue.toISOString();
-			}
-			// Fallback for objects with a value property
-			if (dateTimeValue.value) {
-				return this.convertDateTimeToString(dateTimeValue.value);
-			}
-		}
-
-		// Handle string values
-		if (typeof dateTimeValue === 'string') {
-			return dateTimeValue.trim();
-		}
-
-		// Handle numbers (timestamps)
-		if (typeof dateTimeValue === 'number') {
-			return new Date(dateTimeValue).toISOString();
-		}
-
-		return '';
-	}
-
-	/**
 	 * Sleep utility for retry delays
 	 */
 	private async sleep(ms: number): Promise<void> {
@@ -910,10 +869,7 @@ export class GoogleAdsConversion implements INodeType {
 	private validateInputParameters(executeFunctions: IExecuteFunctions, itemIndex: number): void {
 		const identificationMethod = executeFunctions.getNodeParameter('identificationMethod', itemIndex) as string;
 		const conversionAction = executeFunctions.getNodeParameter('conversionAction', itemIndex) as string;
-		const conversionDateTimeRaw = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
-
-		// Convert DateTime objects from n8n to string
-		const conversionDateTime = this.convertDateTimeToString(conversionDateTimeRaw);
+		const conversionDateTime = executeFunctions.getNodeParameter('conversionDateTime', itemIndex) as string;
 
 		// Validate required fields
 		if (!conversionAction || conversionAction.trim() === '') {
@@ -1148,19 +1104,12 @@ export class GoogleAdsConversion implements INodeType {
 	private async buildConversionPayload(executeFunctions: IExecuteFunctions, itemIndex: number): Promise<any> {
 		const identificationMethod = executeFunctions.getNodeParameter('identificationMethod', itemIndex) as string;
 		const conversionAction = executeFunctions.getNodeParameter('conversionAction', itemIndex) as string;
-		const conversionDateTimeRaw = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
+		const conversionDateTime = executeFunctions.getNodeParameter('conversionDateTime', itemIndex) as string;
 		const conversionValue = executeFunctions.getNodeParameter('conversionValue', itemIndex, 0) as number;
 		const currencyCode = executeFunctions.getNodeParameter('currencyCode', itemIndex, 'USD') as string;
 		const orderId = executeFunctions.getNodeParameter('orderId', itemIndex, '') as string;
 		const adUserDataConsent = executeFunctions.getNodeParameter('adUserDataConsent', itemIndex, 'UNKNOWN') as string;
 		const adPersonalizationConsent = executeFunctions.getNodeParameter('adPersonalizationConsent', itemIndex, 'UNKNOWN') as string;
-
-		// Convert DateTime objects from n8n to string
-		const conversionDateTime = this.convertDateTimeToString(conversionDateTimeRaw);
-
-		if (!conversionDateTime) {
-			throw new NodeOperationError(executeFunctions.getNode(), 'Invalid conversion date time format');
-		}
 
 		// Base conversion object
 		const conversion: any = {
@@ -1269,7 +1218,7 @@ export class GoogleAdsConversion implements INodeType {
 					'googleAdsOAuth2',
 					{
 						method: 'POST',
-						url: `/customers/${customerId}/conversionUploads:uploadClickConversions`,
+						url: `/customers/${customerId}:uploadClickConversions`,
 						body: requestPayload,
 						headers: await this.getAuthenticatedHeaders(executeFunctions),
 					}
@@ -1338,7 +1287,7 @@ export class GoogleAdsConversion implements INodeType {
 					'googleAdsOAuth2',
 					{
 						method: 'POST',
-						url: `/customers/${customerId}/conversionUploads:uploadClickConversions`,
+						url: `/customers/${customerId}:uploadClickConversions`,
 						body: requestPayload,
 						headers: await this.getAuthenticatedHeaders(executeFunctions),
 					}
