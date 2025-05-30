@@ -110,8 +110,8 @@ class GoogleAdsConversion {
                     type: 'string',
                     required: true,
                     default: '={{$now}}',
-                    description: 'The date and time of the conversion in YYYY-MM-DD HH:MM:SS+TZ format',
-                    hint: 'Example: 2024-01-15 14:30:00+00:00',
+                    description: 'The date and time of the conversion. Accepts DateTime objects (like $now) or strings in YYYY-MM-DD HH:MM:SS+TZ format',
+                    hint: 'Example: 2024-01-15 14:30:00+00:00 or use {{$now}} for current time',
                     displayOptions: {
                         show: {
                             operation: ['uploadClickConversion'],
@@ -580,6 +580,42 @@ class GoogleAdsConversion {
         };
     }
     /**
+     * Convert n8n DateTime objects or strings to ISO string format
+     */
+    convertDateTimeToString(dateTimeValue) {
+        if (!dateTimeValue) {
+            return '';
+        }
+        // Handle n8n DateTime objects
+        if (typeof dateTimeValue === 'object') {
+            // Check if it's a Date object
+            if (dateTimeValue instanceof Date) {
+                return dateTimeValue.toISOString();
+            }
+            // Check if it has a toString method (n8n DateTime objects)
+            if (dateTimeValue.toString && typeof dateTimeValue.toString === 'function') {
+                return dateTimeValue.toString();
+            }
+            // Check if it has toISOString method
+            if (dateTimeValue.toISOString && typeof dateTimeValue.toISOString === 'function') {
+                return dateTimeValue.toISOString();
+            }
+            // Fallback for objects with a value property
+            if (dateTimeValue.value) {
+                return this.convertDateTimeToString(dateTimeValue.value);
+            }
+        }
+        // Handle string values
+        if (typeof dateTimeValue === 'string') {
+            return dateTimeValue.trim();
+        }
+        // Handle numbers (timestamps)
+        if (typeof dateTimeValue === 'number') {
+            return new Date(dateTimeValue).toISOString();
+        }
+        return '';
+    }
+    /**
      * Sleep utility for retry delays
      */
     async sleep(ms) {
@@ -775,7 +811,9 @@ class GoogleAdsConversion {
     validateInputParameters(executeFunctions, itemIndex) {
         const identificationMethod = executeFunctions.getNodeParameter('identificationMethod', itemIndex);
         const conversionAction = executeFunctions.getNodeParameter('conversionAction', itemIndex);
-        const conversionDateTime = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
+        const conversionDateTimeRaw = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
+        // Convert DateTime objects from n8n to string
+        const conversionDateTime = this.convertDateTimeToString(conversionDateTimeRaw);
         // Validate required fields
         if (!conversionAction || conversionAction.trim() === '') {
             throw new GoogleAdsValidationError(executeFunctions.getNode(), 'Conversion Action ID is required', 'conversionAction');
@@ -947,12 +985,17 @@ class GoogleAdsConversion {
     async buildConversionPayload(executeFunctions, itemIndex) {
         const identificationMethod = executeFunctions.getNodeParameter('identificationMethod', itemIndex);
         const conversionAction = executeFunctions.getNodeParameter('conversionAction', itemIndex);
-        const conversionDateTime = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
+        const conversionDateTimeRaw = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
         const conversionValue = executeFunctions.getNodeParameter('conversionValue', itemIndex, 0);
         const currencyCode = executeFunctions.getNodeParameter('currencyCode', itemIndex, 'USD');
         const orderId = executeFunctions.getNodeParameter('orderId', itemIndex, '');
         const adUserDataConsent = executeFunctions.getNodeParameter('adUserDataConsent', itemIndex, 'UNKNOWN');
         const adPersonalizationConsent = executeFunctions.getNodeParameter('adPersonalizationConsent', itemIndex, 'UNKNOWN');
+        // Convert DateTime objects from n8n to string
+        const conversionDateTime = this.convertDateTimeToString(conversionDateTimeRaw);
+        if (!conversionDateTime) {
+            throw new n8n_workflow_1.NodeOperationError(executeFunctions.getNode(), 'Invalid conversion date time format');
+        }
         // Base conversion object
         const conversion = {
             conversionAction: conversionAction.startsWith('customers/') ? conversionAction : `customers/${await this.getCustomerId(executeFunctions)}/conversionActions/${conversionAction}`,

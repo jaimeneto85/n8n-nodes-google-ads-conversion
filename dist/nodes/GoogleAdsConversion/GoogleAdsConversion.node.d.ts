@@ -2,6 +2,10 @@ import { IExecuteFunctions, INodeExecutionData, INodeType, INodeTypeDescription 
 export declare class GoogleAdsConversion implements INodeType {
     description: INodeTypeDescription;
     /**
+     * Convert n8n DateTime objects or strings to ISO string format
+     */
+    private convertDateTimeToString;
+    /**
      * Sleep utility for retry delays
      */
     private sleep;
