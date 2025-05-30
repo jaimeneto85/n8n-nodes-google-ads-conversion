@@ -1,0 +1,49 @@
+{
+  "timestamp": "2025-05-30T19:15:14.240Z",
+  "summary": {
+    "validTestCases": 6,
+    "invalidTestCases": 7,
+    "privacyTestCases": 4,
+    "batchTestCases": 3,
+    "errorScenarios": 8,
+    "mockResponses": 3
+  },
+  "testCategories": {
+    "authentication": [
+      "Valid credentials",
+      "Invalid developer token",
+      "Invalid customer ID",
+      "Missing credentials"
+    ],
+    "validation": [
+      "Required fields validation",
+      "Format validation",
+      "Identification method validation",
+      "DateTime format validation"
+    ],
+    "apiIntegration": [
+      "GCLID conversions",
+      "Enhanced conversions",
+      "GBRAID/WBRAID conversions",
+      "Validation mode"
+    ],
+    "errorHandling": [
+      "HTTP error scenarios",
+      "Network error scenarios",
+      "Custom error classes",
+      "Error categorization"
+    ],
+    "retryLogic": [
+      "Exponential backoff",
+      "Rate limit handling",
+      "Retry decision logic",
+      "Maximum retry limits"
+    ],
+    "privacy": [
+      "GDPR consent handling",
+      "Data hashing",
+      "EEA compliance",
+      "Consent combinations"
+    ]
+  }
+}

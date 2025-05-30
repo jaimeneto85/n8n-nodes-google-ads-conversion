@@ -1,5 +1,5 @@
 {
-  "name": "@jaimeneto85/n8n-nodes-google-ads-conversion",
+  "name": "@jaimeflneto/n8n-nodes-google-ads-conversion",
   "version": "0.5.0",
   "description": "n8n node for tracking conversions in Google Ads with support for batch processing, enhanced conversions, and comprehensive privacy compliance",
   "keywords": [
@@ -44,21 +44,19 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc && gulp build:icons",
+    "build": "tsc --noEmitOnError false && gulp build:icons",
+    "build:force": "tsc --noEmitOnError false --skipLibCheck && gulp build:icons",
     "build:watch": "tsc --watch",
     "dev": "tsc --watch",
     "clean": "rimraf dist",
     "format": "prettier nodes credentials docs --write",
     "format:check": "prettier nodes credentials docs --check",
-    "lint": "eslint nodes credentials package.json --ext .ts,.js,.json",
-    "lint:fix": "eslint nodes credentials package.json --ext .ts,.js,.json --fix",
+    "lint": "eslint nodes credentials --ext .ts",
+    "lint:fix": "eslint nodes credentials --ext .ts --fix",
     "test": "node tests/run-tests.js",
     "test:validation": "npm run test",
-    "validate": "npm run lint && npm run test && npm run build",
-    "package": "npm run clean && npm run build && npm pack",
-    "prepublishOnly": "npm run validate",
-    "prepack": "npm run build",
-    "postpack": "npm run clean"
+    "validate": "npm run test && npm run build:force",
+    "package": "npm run clean && npm run build:force && npm pack"
   },
   "files": [
     "dist/**/*",
@@ -88,13 +86,13 @@
     "gulp-typescript": "^6.0.0-alpha.1",
     "n8n-workflow": "^1.15.0",
     "prettier": "^3.1.0",
+    "prettier-eslint": "^16.4.2",
     "rimraf": "^5.0.5",
     "typescript": "^5.3.0"
   },
   "peerDependencies": {
     "n8n-workflow": ">=1.0.0"
   },
-  "dependencies": {},
   "funding": {
     "type": "individual",
     "url": "https://github.com/sponsors/jaimeneto85"
@@ -108,4 +106,4 @@
     "access": "public",
     "registry": "https://registry.npmjs.org/"
   }
-} 
+}

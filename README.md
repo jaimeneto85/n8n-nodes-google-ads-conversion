@@ -42,12 +42,12 @@ An advanced n8n community node for tracking conversions in Google Ads with compr
 
 ### Option 1: npm Installation (Recommended)
 ```bash
-npm install @jaimeneto85/n8n-nodes-google-ads-conversion
+npm install @jaimeflneto/n8n-nodes-google-ads-conversion
 ```
 
 ### Option 2: n8n Community Nodes
 1. In n8n, go to **Settings** → **Community Nodes**
-2. Enter: `@jaimeneto85/n8n-nodes-google-ads-conversion`
+2. Enter: `@jaimeflneto/n8n-nodes-google-ads-conversion`
 3. Click **Install**
 4. Restart n8n
 
@@ -199,7 +199,7 @@ We welcome contributions! Please see our [Contributing Guidelines](docs/develope
 
 ### Development Setup
 ```bash
-git clone https://github.com/jaimeneto85/n8n-nodes-google-ads-conversion.git
+git clone https://github.com/jaimeneot85/n8n-nodes-google-ads-conversion.git
 cd n8n-nodes-google-ads-conversion
 npm install
 npm run dev

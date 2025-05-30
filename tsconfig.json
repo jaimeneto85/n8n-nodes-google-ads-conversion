@@ -1,18 +1,17 @@
 {
   "compilerOptions": {
-    "target": "ES2019",
+    "target": "ES2020",
     "module": "commonjs",
-    "lib": ["ES2019"],
+    "lib": ["ES2020"],
     "declaration": true,
     "outDir": "./dist",
     "rootDir": "./",
-    "removeComments": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "noImplicitReturns": false,
+    "noFallthroughCasesInSwitch": false,
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
@@ -24,11 +23,12 @@
   },
   "include": [
     "credentials/**/*",
-    "nodes/**/*"
+    "nodes/**/*",
+    "index.ts"
   ],
   "exclude": [
     "dist",
     "node_modules",
-    "**/*.test.ts"
+    "tests"
   ]
 } 

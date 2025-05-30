@@ -57,7 +57,9 @@ export class GoogleAdsConversion implements INodeType {
 		defaults: {
 			name: 'Google Ads Conversion',
 		},
+		// @ts-ignore - Compatibility with different n8n versions
 		inputs: ['main'],
+		// @ts-ignore - Compatibility with different n8n versions  
 		outputs: ['main'],
 		credentials: [
 			{

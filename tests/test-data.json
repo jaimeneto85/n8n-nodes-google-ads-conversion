@@ -1,0 +1,357 @@
+{
+  "validTestCases": {
+    "gclid_conversion": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gclid",
+      "gclid": "TeSter-123.456_ABCdef",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "conversionValue": 99.99,
+      "currencyCode": "USD",
+      "orderId": "ORDER_12345",
+      "adUserDataConsent": "GRANTED",
+      "adPersonalizationConsent": "GRANTED",
+      "validateOnly": false,
+      "debugMode": true
+    },
+    "enhanced_conversion": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "enhanced",
+      "email": "john.doe@example.com",
+      "phoneNumber": "+1234567890",
+      "firstName": "John",
+      "lastName": "Doe",
+      "streetAddress": "123 Main Street",
+      "city": "Anytown",
+      "state": "CA",
+      "postalCode": "12345",
+      "countryCode": "US",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "conversionValue": 149.99,
+      "currencyCode": "USD",
+      "orderId": "ORDER_54321",
+      "adUserDataConsent": "GRANTED",
+      "adPersonalizationConsent": "GRANTED",
+      "validateOnly": false,
+      "debugMode": true
+    },
+    "gbraid_conversion": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gbraid",
+      "gbraid": "GBRAID_1.2.test_example_string",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "conversionValue": 0,
+      "adUserDataConsent": "UNKNOWN",
+      "adPersonalizationConsent": "UNKNOWN",
+      "validateOnly": false,
+      "debugMode": true
+    },
+    "wbraid_conversion": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "wbraid",
+      "wbraid": "WBRAID_1.2.test_example_string",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "conversionValue": 0,
+      "adUserDataConsent": "UNKNOWN",
+      "adPersonalizationConsent": "UNKNOWN",
+      "validateOnly": false,
+      "debugMode": true
+    },
+    "validation_only": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gclid",
+      "gclid": "TeSter-123.456_ABCdef",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "conversionValue": 99.99,
+      "currencyCode": "USD",
+      "validateOnly": true,
+      "debugMode": true
+    },
+    "minimal_conversion": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gclid",
+      "gclid": "TeSter-123.456_ABCdef",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "adUserDataConsent": "UNKNOWN",
+      "adPersonalizationConsent": "UNKNOWN",
+      "validateOnly": false,
+      "debugMode": false
+    }
+  },
+  "invalidTestCases": {
+    "missing_conversion_action": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gclid",
+      "gclid": "TeSter-123.456_ABCdef",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "expectedError": "Validation Error: Conversion Action ID is required (Field: conversionAction)"
+    },
+    "missing_datetime": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gclid",
+      "gclid": "TeSter-123.456_ABCdef",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "expectedError": "Validation Error: Conversion Date Time is required (Field: conversionDateTime)"
+    },
+    "missing_gclid": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gclid",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "expectedError": "Validation Error: GCLID is required when using GCLID identification method (Field: gclid)"
+    },
+    "missing_enhanced_data": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "enhanced",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "expectedError": "Validation Error: At least one user identifier (email, phone, or address info) is required for enhanced conversions (Field: userIdentifiers)"
+    },
+    "invalid_datetime_format": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gclid",
+      "gclid": "TeSter-123.456_ABCdef",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "invalid-date-format",
+      "expectedError": "Validation Error: Invalid conversion date time format. Please use YYYY-MM-DD HH:MM:SS+TZ format (e.g., 2024-01-15 14:30:00+00:00) (Field: conversionDateTime)"
+    },
+    "invalid_identification_method": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "invalid_method",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "expectedError": "Validation Error: Unsupported identification method: invalid_method (Field: identificationMethod)"
+    },
+    "unsupported_operation": {
+      "operation": "unsupportedOperation",
+      "expectedError": "Validation Error: Operation \"unsupportedOperation\" is not supported (Field: operation)"
+    }
+  },
+  "privacyTestCases": {
+    "full_consent": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "enhanced",
+      "email": "john.doe@example.com",
+      "phoneNumber": "+1234567890",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "adUserDataConsent": "GRANTED",
+      "adPersonalizationConsent": "GRANTED"
+    },
+    "no_consent": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "enhanced",
+      "email": "john.doe@example.com",
+      "phoneNumber": "+1234567890",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "adUserDataConsent": "DENIED",
+      "adPersonalizationConsent": "DENIED"
+    },
+    "mixed_consent": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "enhanced",
+      "email": "john.doe@example.com",
+      "phoneNumber": "+1234567890",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "adUserDataConsent": "GRANTED",
+      "adPersonalizationConsent": "DENIED"
+    },
+    "unknown_consent": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "enhanced",
+      "email": "john.doe@example.com",
+      "phoneNumber": "+1234567890",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "adUserDataConsent": "UNKNOWN",
+      "adPersonalizationConsent": "UNKNOWN"
+    }
+  },
+  "batchTestCases": [
+    {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gclid",
+      "gclid": "TeSter-123.456_ABCdef",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "conversionValue": 99.99,
+      "currencyCode": "USD",
+      "orderId": "ORDER_001"
+    },
+    {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "enhanced",
+      "email": "jane.smith@example.com",
+      "phoneNumber": "+1987654321",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 15:00:00+00:00",
+      "conversionValue": 149.99,
+      "currencyCode": "USD",
+      "orderId": "ORDER_002"
+    },
+    {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gclid",
+      "gclid": "TeSter-789.012_XYZabc",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 15:30:00+00:00",
+      "conversionValue": 0,
+      "orderId": "ORDER_003"
+    }
+  ],
+  "errorSimulation": {
+    "rate_limit_429": {
+      "httpCode": 429,
+      "response": {
+        "error": {
+          "code": 429,
+          "message": "Resource has been exhausted (e.g. check quota).",
+          "status": "RESOURCE_EXHAUSTED"
+        }
+      },
+      "headers": {
+        "retry-after": "60"
+      }
+    },
+    "invalid_credentials_401": {
+      "httpCode": 401,
+      "response": {
+        "error": {
+          "code": 401,
+          "message": "Request is missing required authentication credential.",
+          "status": "UNAUTHENTICATED"
+        }
+      }
+    },
+    "access_denied_403": {
+      "httpCode": 403,
+      "response": {
+        "error": {
+          "code": 403,
+          "message": "The caller does not have permission to execute the specified operation.",
+          "status": "PERMISSION_DENIED"
+        }
+      }
+    },
+    "invalid_request_400": {
+      "httpCode": 400,
+      "response": {
+        "error": {
+          "code": 400,
+          "message": "Request contains an invalid argument.",
+          "status": "INVALID_ARGUMENT",
+          "details": [
+            {
+              "message": "The conversion action specified is invalid."
+            }
+          ]
+        }
+      }
+    },
+    "not_found_404": {
+      "httpCode": 404,
+      "response": {
+        "error": {
+          "code": 404,
+          "message": "The specified conversion action was not found.",
+          "status": "NOT_FOUND"
+        }
+      }
+    },
+    "server_error_500": {
+      "httpCode": 500,
+      "response": {
+        "error": {
+          "code": 500,
+          "message": "Internal server error occurred.",
+          "status": "INTERNAL"
+        }
+      }
+    },
+    "network_timeout": {
+      "code": "ETIMEDOUT",
+      "message": "Request timed out"
+    },
+    "connection_reset": {
+      "code": "ECONNRESET",
+      "message": "Connection was reset"
+    }
+  },
+  "performanceTestData": {
+    "small_payload": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "gclid",
+      "gclid": "TeSter-123.456_ABCdef",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00"
+    },
+    "large_payload": {
+      "operation": "uploadClickConversion",
+      "identificationMethod": "enhanced",
+      "email": "very.long.email.address.for.testing.purposes@extremely-long-domain-name-for-performance-testing.example.com",
+      "phoneNumber": "+1234567890",
+      "firstName": "VeryLongFirstNameForTestingPurposesToEnsureWeHandleLargeDataCorrectly",
+      "lastName": "VeryLongLastNameForTestingPurposesToEnsureWeHandleLargeDataCorrectly",
+      "streetAddress": "123 Very Long Street Name That Goes On And On For Testing Purposes Avenue",
+      "city": "VeryLongCityNameForTestingPurposes",
+      "state": "VeryLongStateNameForTestingPurposes",
+      "postalCode": "12345-6789",
+      "countryCode": "US",
+      "conversionAction": "customers/1234567890/conversionActions/987654321",
+      "conversionDateTime": "2024-01-15 14:30:00+00:00",
+      "conversionValue": 999999.99,
+      "currencyCode": "USD",
+      "orderId": "VeryLongOrderIdForTestingPurposesToEnsureWeHandleLargeOrderIds123456789"
+    }
+  },
+  "mockResponses": {
+    "successful_upload": {
+      "results": [
+        {
+          "conversionAction": "customers/1234567890/conversionActions/987654321",
+          "conversionDateTime": "2024-01-15 14:30:00+00:00",
+          "conversionValue": 99.99,
+          "currencyCode": "USD"
+        }
+      ],
+      "partialFailureError": null
+    },
+    "successful_validation": {
+      "results": [
+        {
+          "conversionAction": "customers/1234567890/conversionActions/987654321",
+          "conversionDateTime": "2024-01-15 14:30:00+00:00",
+          "conversionValue": 99.99,
+          "currencyCode": "USD"
+        }
+      ],
+      "partialFailureError": null
+    },
+    "partial_failure": {
+      "results": [],
+      "partialFailureError": {
+        "code": 3,
+        "message": "There were some failures in your request.",
+        "details": [
+          {
+            "errors": [
+              {
+                "errorCode": {
+                  "conversionUploadError": "INVALID_CONVERSION_ACTION"
+                },
+                "message": "The conversion action is invalid."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+} 

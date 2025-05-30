@@ -134,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Build System**: Automated build and packaging workflow
 
 #### Installation Methods
-- **npm Installation**: `npm install @jaimeneto85/n8n-nodes-google-ads-conversion`
+- **npm Installation**: `npm install @jaimeflneto/n8n-nodes-google-ads-conversion`
 - **Manual Installation**: Direct file placement in n8n custom nodes directory
 - **Community Nodes**: Integration with n8n's community node registry
 
