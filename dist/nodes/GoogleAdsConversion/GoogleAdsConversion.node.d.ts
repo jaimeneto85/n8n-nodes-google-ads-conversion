@@ -38,6 +38,10 @@ export declare class GoogleAdsConversion implements INodeType {
      */
     private validateCredentials;
     /**
+     * Validate a URL to ensure it's properly formatted
+     */
+    private validateUrl;
+    /**
      * Hash a string using SHA-256 for enhanced conversions
      */
     private hashString;
