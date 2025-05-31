@@ -644,6 +644,62 @@ class GoogleAdsConversion {
                 },
             ],
         };
+        this.methods = {
+            listSearch: {
+                async getManagedAccounts() {
+                    try {
+                        // Get credentials and developer token from authentication
+                        const credentials = await this.getCredentials('googleAdsOAuth2');
+                        // Get manager account info first
+                        const response = await this.helpers.httpRequestWithAuthentication.call(this, 'googleAdsOAuth2', {
+                            method: 'POST',
+                            url: '/googleAds:search',
+                            body: {
+                                query: `
+									SELECT 
+										customer_client.client_customer,
+										customer_client.descriptive_name,
+										customer_client.currency_code,
+										customer_client.time_zone,
+										customer_client.status
+									FROM customer_client 
+									WHERE customer_client.status = 'ENABLED'
+								`,
+                                pageSize: 1000,
+                            },
+                            headers: {
+                                'developer-token': credentials.developerToken,
+                                'login-customer-id': credentials.customerId,
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                            },
+                        });
+                        const results = [];
+                        if (response.results && Array.isArray(response.results)) {
+                            for (const result of response.results) {
+                                const client = result.customerClient;
+                                if (client && client.clientCustomer) {
+                                    const customerId = client.clientCustomer.replace('customers/', '');
+                                    const name = client.descriptiveName || `Account ${customerId}`;
+                                    const currency = client.currencyCode || '';
+                                    const timezone = client.timeZone || '';
+                                    results.push({
+                                        name: `${name} (${customerId})${currency ? ` - ${currency}` : ''}${timezone ? ` - ${timezone}` : ''}`,
+                                        value: customerId,
+                                    });
+                                }
+                            }
+                        }
+                        return {
+                            results: results.sort((a, b) => a.name.localeCompare(b.name)),
+                        };
+                    }
+                    catch (error) {
+                        throw new GoogleAdsApiError(this.getNode(), `Failed to load managed accounts: ${error.message}`, error.httpCode || 500, error.code);
+                    }
+                },
+            },
+        };
     }
     /**
      * Sleep utility for retry delays
@@ -844,12 +900,46 @@ class GoogleAdsConversion {
         }
     }
     /**
+     * Convert n8n DateTime objects or strings to ISO string format
+     */
+    convertDateTimeToString(dateTimeValue) {
+        if (!dateTimeValue) {
+            return '';
+        }
+        // Handle n8n DateTime objects
+        if (typeof dateTimeValue === 'object') {
+            // Check if it's a Date object
+            if (dateTimeValue instanceof Date) {
+                return dateTimeValue.toISOString();
+            }
+            // Check if it has a toString method (n8n DateTime objects)
+            if (dateTimeValue.toString && typeof dateTimeValue.toString === 'function') {
+                return dateTimeValue.toString();
+            }
+            // Check if it has toISOString method
+            if (dateTimeValue.toISOString && typeof dateTimeValue.toISOString === 'function') {
+                return dateTimeValue.toISOString();
+            }
+        }
+        // Handle strings and numbers (timestamps)
+        if (typeof dateTimeValue === 'string') {
+            return dateTimeValue;
+        }
+        if (typeof dateTimeValue === 'number') {
+            return new Date(dateTimeValue).toISOString();
+        }
+        // Fallback: try to convert to string
+        return String(dateTimeValue);
+    }
+    /**
      * Validate input parameters before making API calls
      */
     validateInputParameters(executeFunctions, itemIndex) {
         const identificationMethod = executeFunctions.getNodeParameter('identificationMethod', itemIndex);
         const conversionAction = executeFunctions.getNodeParameter('conversionAction', itemIndex);
-        const conversionDateTime = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
+        const conversionDateTimeRaw = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
+        // Convert DateTime objects from n8n to string
+        const conversionDateTime = this.convertDateTimeToString(conversionDateTimeRaw);
         // Validate required fields
         if (!conversionAction || conversionAction.trim() === '') {
             throw new GoogleAdsValidationError(executeFunctions.getNode(), 'Conversion Action ID is required', 'conversionAction');
@@ -916,14 +1006,18 @@ class GoogleAdsConversion {
             }
             // Extract credential values
             const developerToken = credentials.developerToken;
-            const customerId = credentials.customerId;
-            if (!developerToken || !customerId) {
+            const credentialCustomerId = credentials.customerId;
+            if (!developerToken || !credentialCustomerId) {
                 throw new GoogleAdsAuthenticationError(executeFunctions.getNode(), 'Missing required credentials: developer token and customer ID must be provided');
             }
+            // For manager accounts, use the manager account ID as login-customer-id
+            // For regular accounts, use the same customer ID for both
+            const accountType = executeFunctions.getNodeParameter('accountType', 0, 'regular');
+            const loginCustomerId = credentialCustomerId; // Always use the authenticated account ID as login customer
             // Return headers required for Google Ads API authentication
             return {
                 'developer-token': developerToken,
-                'login-customer-id': customerId,
+                'login-customer-id': loginCustomerId.replace(/\D/g, ''), // Sanitize the login customer ID
                 'Accept': 'application/json',
                 'Content-Type': 'application/json',
             };
@@ -1081,13 +1175,15 @@ class GoogleAdsConversion {
     async buildConversionPayload(executeFunctions, itemIndex) {
         const identificationMethod = executeFunctions.getNodeParameter('identificationMethod', itemIndex);
         const conversionAction = executeFunctions.getNodeParameter('conversionAction', itemIndex);
-        const conversionDateTime = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
+        const conversionDateTimeRaw = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
         const conversionValue = executeFunctions.getNodeParameter('conversionValue', itemIndex, 0);
         const currencyCode = executeFunctions.getNodeParameter('currencyCode', itemIndex, 'USD');
         const orderId = executeFunctions.getNodeParameter('orderId', itemIndex, '');
         const adUserDataConsent = executeFunctions.getNodeParameter('adUserDataConsent', itemIndex, 'UNKNOWN');
         const adPersonalizationConsent = executeFunctions.getNodeParameter('adPersonalizationConsent', itemIndex, 'UNKNOWN');
         const debugMode = executeFunctions.getNodeParameter('debugMode', itemIndex, false);
+        // Convert DateTime objects from n8n to string
+        const conversionDateTime = this.convertDateTimeToString(conversionDateTimeRaw);
         // Validate conversion action
         if (!conversionAction) {
             throw new GoogleAdsValidationError(executeFunctions.getNode(), 'Conversion Action ID is required', 'conversionAction');
@@ -1201,19 +1297,44 @@ class GoogleAdsConversion {
         return conversion;
     }
     /**
-     * Get customer ID from credentials
+     * Get customer ID from credentials or managed account selection
      */
     async getCustomerId(executeFunctions) {
         const credentials = await executeFunctions.getCredentials('googleAdsOAuth2');
-        const customerId = credentials.customerId;
+        const accountType = executeFunctions.getNodeParameter('accountType', 0, 'regular');
+        const debugMode = executeFunctions.getNodeParameter('debugMode', 0, false);
+        let customerId;
+        if (accountType === 'manager') {
+            // For manager accounts, use the selected managed account
+            const managedAccount = executeFunctions.getNodeParameter('managedAccount', 0);
+            if (typeof managedAccount === 'object' && managedAccount.value) {
+                customerId = managedAccount.value;
+            }
+            else if (typeof managedAccount === 'string') {
+                customerId = managedAccount;
+            }
+            else {
+                throw new GoogleAdsAuthenticationError(executeFunctions.getNode(), 'Managed account must be selected when using manager account type');
+            }
+            if (debugMode) {
+                executeFunctions.logger.debug('Using managed account ID:', {
+                    managedAccountId: customerId,
+                    managerAccountId: credentials.customerId
+                });
+            }
+        }
+        else {
+            // For regular accounts, use the credential's customer ID
+            customerId = credentials.customerId;
+            if (debugMode) {
+                executeFunctions.logger.debug('Using regular account ID:', { customerId });
+            }
+        }
         // Validate customer ID exists
         if (!customerId) {
-            throw new GoogleAdsAuthenticationError(executeFunctions.getNode(), 'Customer ID is missing in credentials');
-        }
-        // Log the original customer ID for debugging
-        const debugMode = executeFunctions.getNodeParameter('debugMode', 0, false);
-        if (debugMode) {
-            executeFunctions.logger.debug('Original Customer ID:', { customerId });
+            throw new GoogleAdsAuthenticationError(executeFunctions.getNode(), accountType === 'manager'
+                ? 'Managed account ID is missing or not selected'
+                : 'Customer ID is missing in credentials');
         }
         // Remove any non-digit characters to ensure valid format
         const sanitizedCustomerId = customerId.replace(/\D/g, '');
@@ -1226,7 +1347,10 @@ class GoogleAdsConversion {
             executeFunctions.logger.warn('Customer ID length is unusual. Google Ads customer IDs are typically 10 digits.', { sanitizedCustomerId, length: sanitizedCustomerId.length });
         }
         if (debugMode) {
-            executeFunctions.logger.debug('Sanitized Customer ID:', { sanitizedCustomerId });
+            executeFunctions.logger.debug('Final Customer ID for conversions:', {
+                sanitizedCustomerId,
+                accountType
+            });
         }
         return sanitizedCustomerId;
     }

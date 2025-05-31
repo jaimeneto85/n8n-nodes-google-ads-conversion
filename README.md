@@ -14,6 +14,12 @@ An advanced n8n community node for tracking conversions in Google Ads with compr
 - **GBRAID**: iOS app install conversion tracking (iOS 14.5+)
 - **WBRAID**: iOS web-to-app conversion tracking
 
+### 🏢 **Manager Account (MCC) Support**
+- **Full MCC compatibility**: Upload conversions to managed accounts
+- **Account type detection**: Automatic switching between regular and manager accounts
+- **Managed account selection**: Searchable dropdown with account details
+- **Correct authentication**: Proper login-customer-id headers for MCC
+
 ### ⚡ **High-Performance Batch Processing**
 - Process up to **2000 conversions per API call**
 - **3 processing modes**: Partial Failure, Fail Fast, Continue on Error
@@ -64,15 +70,18 @@ npm install @jaimeflneto/n8n-nodes-google-ads-conversion
 - Google Ads Developer Token ([apply here](https://developers.google.com/google-ads/api/docs/first-call/dev-token))
 - Google Cloud Project with Google Ads API enabled
 - OAuth2 credentials (Client ID & Secret)
+- **For Manager Accounts (MCC)**: Access to managed accounts you want to track
 
 ### 2. Setup Credentials
 1. In n8n, create a new **Google Ads OAuth2** credential
-2. Fill in your Developer Token and Customer ID
+2. Fill in your Developer Token and Customer ID (Manager account ID for MCC)
 3. Add OAuth2 Client ID and Secret
 4. Complete the authorization flow
 
 ### 3. Configure Node
 Add the Google Ads Conversion node to your workflow and configure:
+- **Account Type**: Choose Regular Account or Manager Account (MCC)
+- **Managed Account**: Select target account (only for MCC)
 - **Conversion Action ID**: From Google Ads conversion settings
 - **Identification Method**: Choose GCLID, Enhanced, GBRAID, or WBRAID
 - **Conversion Data**: Value, currency, timestamp, etc.
@@ -111,6 +120,24 @@ Add the Google Ads Conversion node to your workflow and configure:
 }
 ```
 
+### Manager Account (MCC) Configuration
+```json
+{
+  "operation": "uploadClickConversion",
+  "accountType": "manager",
+  "managedAccount": {
+    "mode": "list",
+    "value": "9876543210"
+  },
+  "conversionAction": "customers/9876543210/conversionActions/987654321",
+  "conversionDateTime": "{{$now}}",
+  "conversionValue": 199.99,
+  "currencyCode": "USD",
+  "identificationMethod": "gclid",
+  "gclid": "Cj0KCQiA..."
+}
+```
+
 ### Batch Processing Configuration
 ```json
 {
@@ -134,8 +161,14 @@ Add the Google Ads Conversion node to your workflow and configure:
 | Parameter | Description | Example |
 |-----------|-------------|---------|
 | `conversionAction` | Conversion action ID | `customers/123/conversionActions/456` |
-| `conversionDateTime` | Conversion timestamp | `2025-01-15 14:30:00+00:00` |
+| `conversionDateTime` | Conversion timestamp | `2025-01-15 14:30:00+00:00` or `{{$now}}` |
 | `identificationMethod` | User identification method | `gclid`, `enhanced`, `gbraid`, `wbraid` |
+
+### Account Configuration
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `accountType` | Account type | `regular`, `manager` |
+| `managedAccount` | Managed account (MCC only) | `{ "mode": "list", "value": "1234567890" }` |
 
 ### Optional Parameters
 | Parameter | Description | Default |
@@ -175,11 +208,13 @@ Enable `debugMode` for comprehensive logging of requests, responses, and process
 - Verify developer token is approved and active
 - Check OAuth2 credentials are correctly configured
 - Ensure customer ID format is correct (123-456-7890)
+- **For MCC**: Verify manager account has access to selected managed account
 
 #### Validation Errors
 - Verify all required fields are provided
-- Check date format: `YYYY-MM-DD HH:MM:SS+TZ`
+- Check date format: `YYYY-MM-DD HH:MM:SS+TZ` or use `{{$now}}`
 - For enhanced conversions, provide at least one user identifier
+- **For MCC**: Ensure managed account is selected when using manager account type
 
 #### Rate Limiting
 - Enable batch processing for high volumes
@@ -239,6 +274,11 @@ npm run dev
 - **Audit trail**: Comprehensive logging
 
 ## 📈 Roadmap
+
+### ✅ Recently Implemented (v0.7.0)
+- **Manager Account (MCC) Support**: Full support for uploading conversions to managed accounts
+- **DateTime Object Support**: Native compatibility with n8n `{{$now}}` expressions
+- **Enhanced Error Handling**: Improved URL validation and customer ID processing
 
 ### Upcoming Features
 - Offline conversion support

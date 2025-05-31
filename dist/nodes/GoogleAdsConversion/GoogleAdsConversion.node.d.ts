@@ -1,6 +1,11 @@
-import { IExecuteFunctions, INodeExecutionData, INodeType, INodeTypeDescription } from 'n8n-workflow';
+import { IExecuteFunctions, INodeExecutionData, INodeType, INodeTypeDescription, ILoadOptionsFunctions, INodeListSearchResult } from 'n8n-workflow';
 export declare class GoogleAdsConversion implements INodeType {
     description: INodeTypeDescription;
+    methods: {
+        listSearch: {
+            getManagedAccounts(this: ILoadOptionsFunctions): Promise<INodeListSearchResult>;
+        };
+    };
     /**
      * Sleep utility for retry delays
      */
@@ -25,6 +30,10 @@ export declare class GoogleAdsConversion implements INodeType {
      * Parse and categorize Google Ads API errors
      */
     private parseApiError;
+    /**
+     * Convert n8n DateTime objects or strings to ISO string format
+     */
+    private convertDateTimeToString;
     /**
      * Validate input parameters before making API calls
      */
@@ -54,7 +63,7 @@ export declare class GoogleAdsConversion implements INodeType {
      */
     private buildConversionPayload;
     /**
-     * Get customer ID from credentials
+     * Get customer ID from credentials or managed account selection
      */
     private getCustomerId;
     /**
