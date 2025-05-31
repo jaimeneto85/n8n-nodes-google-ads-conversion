@@ -1076,8 +1076,38 @@ export class GoogleAdsConversion implements INodeType {
 	 */
 	private validateUrl(baseUrl: string, path: string, executeFunctions: IExecuteFunctions): boolean {
 		try {
+			// Validate base URL format
+			if (!baseUrl || typeof baseUrl !== 'string' || !baseUrl.startsWith('http')) {
+				executeFunctions.logger.error('Invalid base URL format:', { baseUrl });
+				return false;
+			}
+
+			// Validate path format
+			if (!path || typeof path !== 'string') {
+				executeFunctions.logger.error('Invalid path format:', { path });
+				return false;
+			}
+
+			// Check for required path components for customer ID
+			if (path.includes('/customers/') && !path.match(/\/customers\/\d+/)) {
+				executeFunctions.logger.error('Invalid customer ID in path:', { path });
+				return false;
+			}
+
 			// Attempt to construct a URL object to validate
 			const url = new URL(path, baseUrl);
+			
+			// Additional validation on the constructed URL
+			if (!url.href || url.href === baseUrl + '/') {
+				executeFunctions.logger.error('URL construction resulted in invalid URL:', {
+					baseUrl, path, constructedUrl: url.href
+				});
+				return false;
+			}
+			
+			executeFunctions.logger.debug('URL validation successful:', {
+				baseUrl, path, constructedUrl: url.href
+			});
 			return true;
 		} catch (error) {
 			executeFunctions.logger.error('URL validation failed:', {
@@ -1181,14 +1211,42 @@ export class GoogleAdsConversion implements INodeType {
 
 		// Format conversion action resource name
 		let formattedConversionAction: string;
+		
+		// Log the original conversion action ID for debugging
+		if (debugMode) {
+			executeFunctions.logger.debug('Original Conversion Action ID:', { conversionAction });
+		}
+		
+		// Check if it's already a fully qualified resource name
 		if (conversionAction.startsWith('customers/')) {
+			// Validate the format of the fully qualified resource name
+			const resourceNamePattern = /^customers\/\d+\/conversionActions\/\w+$/;
+			if (!resourceNamePattern.test(conversionAction)) {
+				throw new GoogleAdsValidationError(
+					executeFunctions.getNode(),
+					`Invalid conversion action resource name format: ${conversionAction}. Expected format: customers/{customer_id}/conversionActions/{conversion_action_id}`,
+					'conversionAction'
+				);
+			}
 			formattedConversionAction = conversionAction;
-		} else {
-			// Remove any non-alphanumeric characters except for underscores from the conversion action ID
-			const sanitizedConversionAction = conversionAction.replace(/[^\w]/g, '');
 			
-			if (sanitizedConversionAction !== conversionAction && debugMode) {
-				executeFunctions.logger.debug('Sanitized conversion action ID:', {
+			if (debugMode) {
+				executeFunctions.logger.debug('Using fully qualified conversion action resource name:', { formattedConversionAction });
+			}
+		} else {
+			// Validate the conversion action ID format before sanitizing
+			if (!/^[\w\-]+$/.test(conversionAction)) {
+				executeFunctions.logger.warn('Conversion Action ID contains potentially invalid characters:', {
+					conversionAction,
+					recommendation: 'Use only alphanumeric characters, underscores, and hyphens for conversion action IDs'
+				});
+			}
+			
+			// Remove any non-alphanumeric characters except for underscores and hyphens from the conversion action ID
+			const sanitizedConversionAction = conversionAction.replace(/[^\w\-]/g, '');
+			
+			if (sanitizedConversionAction !== conversionAction) {
+				executeFunctions.logger.warn('Conversion Action ID was sanitized:', {
 					original: conversionAction,
 					sanitized: sanitizedConversionAction
 				});
@@ -1202,7 +1260,16 @@ export class GoogleAdsConversion implements INodeType {
 				);
 			}
 			
+			// Construct the fully qualified resource name
 			formattedConversionAction = `customers/${customerId}/conversionActions/${sanitizedConversionAction}`;
+			
+			if (debugMode) {
+				executeFunctions.logger.debug('Constructed conversion action resource name:', {
+					customerId,
+					sanitizedConversionAction,
+					formattedConversionAction
+				});
+			}
 		}
 
 		// Base conversion object
@@ -1281,7 +1348,7 @@ export class GoogleAdsConversion implements INodeType {
 		const credentials = await executeFunctions.getCredentials('googleAdsOAuth2');
 		const customerId = credentials.customerId as string;
 		
-		// Validate customer ID
+		// Validate customer ID exists
 		if (!customerId) {
 			throw new GoogleAdsAuthenticationError(
 				executeFunctions.getNode(),
@@ -1289,14 +1356,33 @@ export class GoogleAdsConversion implements INodeType {
 			);
 		}
 		
+		// Log the original customer ID for debugging
+		const debugMode = executeFunctions.getNodeParameter('debugMode', 0, false) as boolean;
+		if (debugMode) {
+			executeFunctions.logger.debug('Original Customer ID:', { customerId });
+		}
+		
 		// Remove any non-digit characters to ensure valid format
 		const sanitizedCustomerId = customerId.replace(/\D/g, '');
 		
+		// Validate that we have digits after sanitization
 		if (!sanitizedCustomerId) {
 			throw new GoogleAdsAuthenticationError(
 				executeFunctions.getNode(),
 				'Customer ID contains no valid digits'
 			);
+		}
+		
+		// Validate the length of the customer ID (Google Ads customer IDs are typically 10 digits)
+		if (sanitizedCustomerId.length < 8 || sanitizedCustomerId.length > 12) {
+			executeFunctions.logger.warn(
+				'Customer ID length is unusual. Google Ads customer IDs are typically 10 digits.',
+				{ sanitizedCustomerId, length: sanitizedCustomerId.length }
+			);
+		}
+		
+		if (debugMode) {
+			executeFunctions.logger.debug('Sanitized Customer ID:', { sanitizedCustomerId });
 		}
 		
 		return sanitizedCustomerId;
@@ -1335,14 +1421,34 @@ export class GoogleAdsConversion implements INodeType {
 		}
 
 		// Construct and validate the URL
-		const apiEndpoint = `/customers/${customerId}:uploadClickConversions`;
 		const baseUrl = 'https://googleads.googleapis.com/v17';
+		
+		// Validate customer ID format before constructing the URL
+		if (!customerId || !/^\d+$/.test(customerId)) {
+			throw new GoogleAdsApiError(
+				executeFunctions.getNode(),
+				`Invalid customer ID format: ${customerId}. Must contain only digits.`,
+				400,
+				'ERR_INVALID_CUSTOMER_ID'
+			);
+		}
+		
+		const apiEndpoint = `/customers/${customerId}:uploadClickConversions`;
+		
+		// Log the URL components for debugging
+		if (debugMode) {
+			executeFunctions.logger.debug('URL Components:', {
+				baseUrl,
+				apiEndpoint,
+				fullUrl: new URL(apiEndpoint, baseUrl).href
+			});
+		}
 		
 		// Validate URL before making the request
 		if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
 			throw new GoogleAdsApiError(
 				executeFunctions.getNode(),
-				`Invalid URL constructed for conversion upload. Please check your customer ID format.`,
+				`Invalid URL constructed for conversion upload. Base URL: ${baseUrl}, Path: ${apiEndpoint}. Please check your customer ID format.`,
 				400,
 				'ERR_INVALID_URL'
 			);
@@ -1423,15 +1529,51 @@ export class GoogleAdsConversion implements INodeType {
 		return await this.executeWithRetry(
 			executeFunctions,
 			async () => {
+				// Validate customer ID format before constructing the URL
+				if (!customerId || !/^\d+$/.test(customerId)) {
+					throw new GoogleAdsApiError(
+						executeFunctions.getNode(),
+						`Invalid customer ID format: ${customerId}. Must contain only digits.`,
+						400,
+						'ERR_INVALID_CUSTOMER_ID'
+					);
+				}
+				
+				// Construct the API endpoint
+				const apiEndpoint = `/customers/${customerId}:uploadClickConversions`;
+				const baseUrl = 'https://googleads.googleapis.com/v17';
+				
+				// Log the URL components for debugging
+				if (debugMode) {
+					executeFunctions.logger.debug('Batch URL Components:', {
+						baseUrl,
+						apiEndpoint,
+						fullUrl: new URL(apiEndpoint, baseUrl).href
+					});
+				}
+				
+				// Validate URL before making the request
+				if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
+					throw new GoogleAdsApiError(
+						executeFunctions.getNode(),
+						`Invalid URL constructed for batch conversion upload. Base URL: ${baseUrl}, Path: ${apiEndpoint}. Please check your customer ID format.`,
+						400,
+						'ERR_INVALID_URL'
+					);
+				}
+				
 				// Make the batch API call
 				const response = await executeFunctions.helpers.httpRequestWithAuthentication.call(
 					executeFunctions,
 					'googleAdsOAuth2',
 					{
 						method: 'POST',
-						url: `/customers/${customerId}:uploadClickConversions`,
+						url: apiEndpoint,
 						body: requestPayload,
 						headers: await this.getAuthenticatedHeaders(executeFunctions),
+						// Add timeout and error handling options
+						timeout: 30000, // 30 seconds timeout
+						ignoreHttpStatusErrors: false, // Don't ignore HTTP errors
 					}
 				);
 
@@ -1729,25 +1871,82 @@ export class GoogleAdsConversion implements INodeType {
 				}
 
 			} catch (error) {
+				// Enhanced error handling with detailed diagnostics
+				const debugMode = executeFunctions.getNodeParameter('debugMode', i, false) as boolean;
+				const operation = executeFunctions.getNodeParameter('operation', i) as string;
+				
+				// Extract error details
+				const errorMessage = (error as Error).message;
+				const errorType = (error as any).name || 'Unknown';
+				const httpCode = (error as any).httpCode || 'Unknown';
+				const apiErrorCode = (error as any).apiErrorCode || 'Unknown';
+				
+				// Create detailed error object with diagnostics
+				const errorDetails: Record<string, any> = {
+					error: errorMessage,
+					errorType,
+					httpCode,
+					apiErrorCode,
+					operation,
+				};
+				
+				// Add URL-specific diagnostics for URL errors
+				if (errorType === 'GoogleAdsApiError' && apiErrorCode === 'ERR_INVALID_URL') {
+					try {
+						// Get customer ID for diagnostics
+						const credentials = await executeFunctions.getCredentials('googleAdsOAuth2');
+						const customerId = credentials.customerId as string;
+						
+						errorDetails.urlDiagnostics = {
+							originalCustomerId: customerId,
+							sanitizedCustomerId: customerId ? customerId.replace(/\D/g, '') : null,
+							customerIdFormat: customerId ? (!/^\d+$/.test(customerId) ? 'Contains non-digit characters' : 'Valid format') : 'Missing',
+							attemptedUrl: `/customers/${customerId ? customerId.replace(/\D/g, '') : 'undefined'}:uploadClickConversions`,
+						};
+						
+						// Log detailed diagnostics for URL errors
+						executeFunctions.logger.error(`GoogleAdsConversion URL construction error for item ${i + 1}:`, errorDetails);
+					} catch (diagError) {
+						executeFunctions.logger.error(`Error while collecting URL diagnostics:`, {
+							originalError: errorMessage,
+							diagnosticError: (diagError as Error).message
+						});
+					}
+				} else {
+					// Log standard error details
+					executeFunctions.logger.error(`GoogleAdsConversion error for item ${i + 1}:`, errorDetails);
+				}
+				
 				if (executeFunctions.continueOnFail()) {
-					// Log error details for debugging
-					executeFunctions.logger.error(`GoogleAdsConversion error for item ${i + 1}:`, {
-						error: (error as Error).message,
-						errorType: (error as any).name || 'Unknown',
-						operation: executeFunctions.getNodeParameter('operation', i) as string,
-						item: items[i].json,
-					});
-
-					returnData.push({
-						json: {
-							error: (error as Error).message,
-							errorType: (error as any).name || 'Unknown',
-							success: false,
-							operation: executeFunctions.getNodeParameter('operation', i) as string,
-							item: items[i].json,
-							itemIndex: i,
-						},
-					});
+					// Include detailed error information in the output
+					const errorOutput: Record<string, any> = {
+						error: errorMessage,
+						errorType,
+						success: false,
+						operation,
+						itemIndex: i,
+					};
+					
+					// Add error details for better debugging
+					if (httpCode !== 'Unknown') {
+						errorOutput.errorDetails = { httpCode };
+						if (apiErrorCode !== 'Unknown') {
+							errorOutput.errorDetails.apiErrorCode = apiErrorCode;
+						}
+					}
+					
+					// Add URL diagnostics for URL errors
+					if (errorType === 'GoogleAdsApiError' && apiErrorCode === 'ERR_INVALID_URL' &&
+						errorDetails.urlDiagnostics) {
+						errorOutput.urlDiagnostics = errorDetails.urlDiagnostics;
+					}
+					
+					// Add full item data in debug mode
+					if (debugMode) {
+						errorOutput.item = items[i].json;
+					}
+					
+					returnData.push({ json: errorOutput });
 					continue;
 				}
 				throw error;
