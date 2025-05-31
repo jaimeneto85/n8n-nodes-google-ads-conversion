@@ -772,6 +772,20 @@ export class GoogleAdsConversion implements INodeType {
 		const message = error.message || 'Unknown error occurred';
 		const responseBody = error.response?.body || error.body;
 
+		// Check for URL-related errors first
+		if (message.includes('ERR_INVALID_URL') || message.includes('Invalid URL')) {
+			executeFunctions.logger.error('URL validation error:', {
+				message,
+				stack: error.stack,
+			});
+			return new GoogleAdsApiError(
+				executeFunctions.getNode(),
+				`Invalid URL: ${message}. Please check your customer ID format and ensure it contains only valid characters.`,
+				400,
+				'ERR_INVALID_URL'
+			);
+		}
+
 		// Log full error details in debug mode
 		executeFunctions.logger.debug('Google Ads API Error Details:', {
 			httpCode,
@@ -1007,12 +1021,32 @@ export class GoogleAdsConversion implements INodeType {
 	private async validateCredentials(executeFunctions: IExecuteFunctions, headers: Record<string, string>): Promise<void> {
 		const debugMode = executeFunctions.getNodeParameter('debugMode', 0, false) as boolean;
 
+		// Get customer ID for validation
+		let customerId;
+		try {
+			customerId = await this.getCustomerId(executeFunctions);
+		} catch (error) {
+			executeFunctions.logger.error('Failed to get valid customer ID during credential validation:', error);
+			throw error;
+		}
+
+		// Construct and validate the URL
+		const apiEndpoint = `/customers/${customerId}/googleAds:search`;
+		const baseUrl = 'https://googleads.googleapis.com/v17';
+		
+		// Validate URL before making the request
+		if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
+			throw new GoogleAdsApiError(
+				executeFunctions.getNode(),
+				`Invalid URL constructed for credential validation. Please check your customer ID format.`,
+				400,
+				'ERR_INVALID_URL'
+			);
+		}
+
 		await this.executeWithRetry(
 			executeFunctions,
 			async () => {
-				const credentials = await executeFunctions.getCredentials('googleAdsOAuth2');
-				const customerId = credentials.customerId as string;
-
 				// Simple test query to validate credentials
 				const testPayload = {
 					query: 'SELECT customer.id FROM customer LIMIT 1',
@@ -1023,15 +1057,36 @@ export class GoogleAdsConversion implements INodeType {
 					'googleAdsOAuth2',
 					{
 						method: 'POST',
-						url: `/customers/${customerId}/googleAds:search`,
+						url: apiEndpoint,
 						body: testPayload,
 						headers,
+						// Add timeout and error handling options
+						timeout: 30000, // 30 seconds timeout
+						ignoreHttpStatusErrors: false, // Don't ignore HTTP errors
 					}
 				);
 			},
 			'Credential Validation',
 			debugMode
 		);
+	}
+
+	/**
+	 * Validate a URL to ensure it's properly formatted
+	 */
+	private validateUrl(baseUrl: string, path: string, executeFunctions: IExecuteFunctions): boolean {
+		try {
+			// Attempt to construct a URL object to validate
+			const url = new URL(path, baseUrl);
+			return true;
+		} catch (error) {
+			executeFunctions.logger.error('URL validation failed:', {
+				baseUrl,
+				path,
+				error: (error as Error).message
+			});
+			return false;
+		}
 	}
 
 	/**
@@ -1110,10 +1165,49 @@ export class GoogleAdsConversion implements INodeType {
 		const orderId = executeFunctions.getNodeParameter('orderId', itemIndex, '') as string;
 		const adUserDataConsent = executeFunctions.getNodeParameter('adUserDataConsent', itemIndex, 'UNKNOWN') as string;
 		const adPersonalizationConsent = executeFunctions.getNodeParameter('adPersonalizationConsent', itemIndex, 'UNKNOWN') as string;
+		const debugMode = executeFunctions.getNodeParameter('debugMode', itemIndex, false) as boolean;
+
+		// Validate conversion action
+		if (!conversionAction) {
+			throw new GoogleAdsValidationError(
+				executeFunctions.getNode(),
+				'Conversion Action ID is required',
+				'conversionAction'
+			);
+		}
+
+		// Get customer ID for building the conversion action resource name
+		const customerId = await this.getCustomerId(executeFunctions);
+
+		// Format conversion action resource name
+		let formattedConversionAction: string;
+		if (conversionAction.startsWith('customers/')) {
+			formattedConversionAction = conversionAction;
+		} else {
+			// Remove any non-alphanumeric characters except for underscores from the conversion action ID
+			const sanitizedConversionAction = conversionAction.replace(/[^\w]/g, '');
+			
+			if (sanitizedConversionAction !== conversionAction && debugMode) {
+				executeFunctions.logger.debug('Sanitized conversion action ID:', {
+					original: conversionAction,
+					sanitized: sanitizedConversionAction
+				});
+			}
+			
+			if (!sanitizedConversionAction) {
+				throw new GoogleAdsValidationError(
+					executeFunctions.getNode(),
+					'Conversion Action ID contains no valid characters',
+					'conversionAction'
+				);
+			}
+			
+			formattedConversionAction = `customers/${customerId}/conversionActions/${sanitizedConversionAction}`;
+		}
 
 		// Base conversion object
 		const conversion: any = {
-			conversionAction: conversionAction.startsWith('customers/') ? conversionAction : `customers/${await this.getCustomerId(executeFunctions)}/conversionActions/${conversionAction}`,
+			conversionAction: formattedConversionAction,
 			conversionDateTime: conversionDateTime,
 		};
 
@@ -1185,16 +1279,44 @@ export class GoogleAdsConversion implements INodeType {
 	 */
 	private async getCustomerId(executeFunctions: IExecuteFunctions): Promise<string> {
 		const credentials = await executeFunctions.getCredentials('googleAdsOAuth2');
-		return credentials.customerId as string;
+		const customerId = credentials.customerId as string;
+		
+		// Validate customer ID
+		if (!customerId) {
+			throw new GoogleAdsAuthenticationError(
+				executeFunctions.getNode(),
+				'Customer ID is missing in credentials'
+			);
+		}
+		
+		// Remove any non-digit characters to ensure valid format
+		const sanitizedCustomerId = customerId.replace(/\D/g, '');
+		
+		if (!sanitizedCustomerId) {
+			throw new GoogleAdsAuthenticationError(
+				executeFunctions.getNode(),
+				'Customer ID contains no valid digits'
+			);
+		}
+		
+		return sanitizedCustomerId;
 	}
 
 	/**
 	 * Execute conversion upload to Google Ads API with retry logic
 	 */
 	private async uploadConversion(executeFunctions: IExecuteFunctions, conversion: any, itemIndex: number): Promise<any> {
-		const customerId = await this.getCustomerId(executeFunctions);
 		const validateOnly = executeFunctions.getNodeParameter('validateOnly', itemIndex, false) as boolean;
 		const debugMode = executeFunctions.getNodeParameter('debugMode', itemIndex, false) as boolean;
+
+		// Get and validate customer ID
+		let customerId;
+		try {
+			customerId = await this.getCustomerId(executeFunctions);
+		} catch (error) {
+			executeFunctions.logger.error('Failed to get valid customer ID:', error);
+			throw error;
+		}
 
 		// Build the request payload
 		const requestPayload = {
@@ -1206,7 +1328,24 @@ export class GoogleAdsConversion implements INodeType {
 		};
 
 		if (debugMode) {
-			executeFunctions.logger.debug('Google Ads Conversion API Request Payload:', { payload: requestPayload });
+			executeFunctions.logger.debug('Google Ads Conversion API Request Payload:', {
+				payload: requestPayload,
+				customerId
+			});
+		}
+
+		// Construct and validate the URL
+		const apiEndpoint = `/customers/${customerId}:uploadClickConversions`;
+		const baseUrl = 'https://googleads.googleapis.com/v17';
+		
+		// Validate URL before making the request
+		if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
+			throw new GoogleAdsApiError(
+				executeFunctions.getNode(),
+				`Invalid URL constructed for conversion upload. Please check your customer ID format.`,
+				400,
+				'ERR_INVALID_URL'
+			);
 		}
 
 		return await this.executeWithRetry(
@@ -1218,9 +1357,12 @@ export class GoogleAdsConversion implements INodeType {
 					'googleAdsOAuth2',
 					{
 						method: 'POST',
-						url: `/customers/${customerId}:uploadClickConversions`,
+						url: apiEndpoint,
 						body: requestPayload,
 						headers: await this.getAuthenticatedHeaders(executeFunctions),
+						// Add timeout and error handling options
+						timeout: 30000, // 30 seconds timeout
+						ignoreHttpStatusErrors: false, // Don't ignore HTTP errors
 					}
 				);
 
