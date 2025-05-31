@@ -91,6 +91,73 @@ export class GoogleAdsConversion implements INodeType {
 				default: 'uploadClickConversion',
 			},
 
+			// Account Type Detection
+			{
+				displayName: 'Account Type',
+				name: 'accountType',
+				type: 'options',
+				options: [
+					{
+						name: 'Regular Google Ads Account',
+						value: 'regular',
+						description: 'Direct Google Ads account (not a manager account)',
+					},
+					{
+						name: 'Manager Account (MCC)',
+						value: 'manager',
+						description: 'Manager account that manages multiple client accounts',
+					},
+				],
+				default: 'regular',
+				description: 'Select your account type',
+				displayOptions: {
+					show: {
+						operation: ['uploadClickConversion'],
+					},
+				},
+			},
+			{
+				displayName: 'Managed Account',
+				name: 'managedAccount',
+				type: 'resourceLocator',
+				default: { mode: 'list', value: '' },
+				required: true,
+				description: 'Select the managed account to upload conversions to',
+				modes: [
+					{
+						displayName: 'From List',
+						name: 'list',
+						type: 'list',
+						placeholder: 'Select a managed account...',
+						typeOptions: {
+							searchListMethod: 'getManagedAccounts',
+							searchable: true,
+						},
+					},
+					{
+						displayName: 'By ID',
+						name: 'id',
+						type: 'string',
+						validation: [
+							{
+								type: 'regex',
+								properties: {
+									regex: '^[0-9]+$',
+									errorMessage: 'Customer ID must contain only numbers',
+								},
+							},
+						],
+						placeholder: '1234567890',
+					},
+				],
+				displayOptions: {
+					show: {
+						operation: ['uploadClickConversion'],
+						accountType: ['manager'],
+					},
+				},
+			},
+
 			// Conversion Data Section
 			{
 				displayName: 'Conversion Data',
