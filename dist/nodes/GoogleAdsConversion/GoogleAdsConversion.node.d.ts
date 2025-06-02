@@ -99,4 +99,8 @@ export declare class GoogleAdsConversion implements INodeType {
      */
     private processIndividualItems;
     execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]>;
+    /**
+     * Diagnose permission issues for 403 errors
+     */
+    private diagnosePermissionIssues;
 }

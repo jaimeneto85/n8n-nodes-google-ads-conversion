@@ -1032,7 +1032,15 @@ class GoogleAdsConversion {
             case 401:
                 return new GoogleAdsAuthenticationError(executeFunctions.getNode(), `Authentication failed. ${detailedMessage}. Please verify your OAuth2 credentials and developer token.`);
             case 403:
-                return new GoogleAdsAuthenticationError(executeFunctions.getNode(), `Access denied. ${detailedMessage}. Please verify your developer token permissions and customer ID access.`);
+                // Add basic permission guidance for 403 errors
+                let permissionMessage = `Access denied. ${detailedMessage}. Please verify your developer token permissions and customer ID access.`;
+                // Add basic guidance based on common 403 issues
+                permissionMessage += `\n\nCommon causes:\n• Account Type mismatch (check if you should use "Manager Account" vs "Regular Account")\n• Developer token lacks access to the target customer ID\n• OAuth credentials don't have proper scopes or permissions\n• Customer ID is incorrect or inaccessible\n• Conversion action belongs to a different account`;
+                console.error('Google Ads 403 Error - Permission Denied:', {
+                    detailedMessage,
+                    guidance: 'Check account type configuration and developer token permissions',
+                });
+                return new GoogleAdsAuthenticationError(executeFunctions.getNode(), permissionMessage);
             case 404:
                 return new GoogleAdsValidationError(executeFunctions.getNode(), `Resource not found. ${detailedMessage}. Please check your conversion action ID and customer ID.`);
             case 429:
@@ -2118,6 +2126,108 @@ class GoogleAdsConversion {
         const googleAdsConversion = new GoogleAdsConversion();
         const returnData = await googleAdsConversion.processBatchItems(this, items);
         return [returnData];
+    }
+    /**
+     * Diagnose permission issues for 403 errors
+     */
+    async diagnosePermissionIssues(executeFunctions) {
+        const issues = [];
+        try {
+            const credentials = await executeFunctions.getCredentials('googleAdsOAuth2');
+            const accountType = executeFunctions.getNodeParameter('accountType', 0, 'regular');
+            const debugMode = executeFunctions.getNodeParameter('debugMode', 0, false);
+            const managerCustomerId = credentials.customerId;
+            const sanitizedManagerId = managerCustomerId.replace(/\D/g, '');
+            let targetCustomerId;
+            if (accountType === 'manager') {
+                const managedAccount = executeFunctions.getNodeParameter('managedAccount', 0);
+                targetCustomerId =
+                    typeof managedAccount === 'object' ? managedAccount.value : managedAccount;
+            }
+            else {
+                targetCustomerId = managerCustomerId;
+            }
+            const sanitizedTargetId = targetCustomerId.replace(/\D/g, '');
+            // Check if manager and target are the same (should be regular account)
+            if (accountType === 'manager' && sanitizedManagerId === sanitizedTargetId) {
+                issues.push(`Account Type Mismatch: You selected "Manager Account" but the target customer ID (${sanitizedTargetId}) is the same as your authentication customer ID (${sanitizedManagerId}). This should be set to "Regular Google Ads Account".`);
+            }
+            // Check if using regular account but IDs are different
+            if (accountType === 'regular' && sanitizedManagerId !== sanitizedTargetId) {
+                issues.push(`Account Type Mismatch: You selected "Regular Google Ads Account" but your authentication customer ID (${sanitizedManagerId}) differs from the target customer ID (${sanitizedTargetId}). This should be set to "Manager Account (MCC)".`);
+            }
+            // Check developer token format
+            const developerToken = credentials.developerToken;
+            if (!developerToken || developerToken.length < 20) {
+                issues.push(`Invalid Developer Token: The developer token appears to be invalid or too short. Developer tokens should be long alphanumeric strings.`);
+            }
+            console.log('Permission Diagnosis Debug:', {
+                accountType,
+                managerCustomerId: sanitizedManagerId,
+                targetCustomerId: sanitizedTargetId,
+                sameAccount: sanitizedManagerId === sanitizedTargetId,
+                developerTokenLength: developerToken ? developerToken.length : 0,
+                detectedIssues: issues.length,
+            });
+            // Test basic API access
+            const headers = await this.getAuthenticatedHeaders(executeFunctions);
+            const testUrl = `https://googleads.googleapis.com/v17/customers/${sanitizedTargetId}/googleAds:search`;
+            try {
+                const testPayload = {
+                    query: 'SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1',
+                };
+                await executeFunctions.helpers.httpRequestWithAuthentication.call(executeFunctions, 'googleAdsOAuth2', {
+                    method: 'POST',
+                    url: testUrl,
+                    body: testPayload,
+                    headers: headers,
+                    timeout: 10000,
+                });
+                console.log('Permission Test: Basic API access successful');
+            }
+            catch (testError) {
+                const testHttpCode = testError.httpCode || testError.status || 0;
+                if (testHttpCode === 403) {
+                    issues.push(`API Access Denied: Your developer token or OAuth credentials do not have access to customer ID ${sanitizedTargetId}. Verify: 1) Developer token is approved for production, 2) OAuth account has access to this customer, 3) Customer ID is correct.`);
+                }
+                else if (testHttpCode === 401) {
+                    issues.push(`Authentication Failed: Your OAuth credentials or developer token are invalid. Please re-authenticate and verify your developer token.`);
+                }
+                else if (testHttpCode === 400) {
+                    console.log('Permission Test: Customer access OK, but query failed (expected for basic test)');
+                }
+                else {
+                    issues.push(`API Test Failed: Unexpected error ${testHttpCode} when testing API access. This may indicate network or server issues.`);
+                }
+                console.log('Permission Test Error:', {
+                    httpCode: testHttpCode,
+                    message: testError.message,
+                    testUrl: testUrl,
+                });
+            }
+            // Check conversion action format and accessibility
+            const conversionAction = executeFunctions.getNodeParameter('conversionAction', 0);
+            if (conversionAction) {
+                if (conversionAction.startsWith('customers/')) {
+                    const actionMatch = conversionAction.match(/customers\/(\d+)\/conversionActions\/(\w+)/);
+                    if (actionMatch) {
+                        const actionCustomerId = actionMatch[1];
+                        if (actionCustomerId !== sanitizedTargetId) {
+                            issues.push(`Conversion Action Mismatch: The conversion action "${conversionAction}" belongs to customer ${actionCustomerId}, but you're trying to upload to customer ${sanitizedTargetId}. Make sure you're using a conversion action from the correct account.`);
+                        }
+                    }
+                }
+                else {
+                    // Will be constructed as customers/{targetId}/conversionActions/{action}
+                    console.log('Conversion Action: Will be constructed for target customer', sanitizedTargetId);
+                }
+            }
+        }
+        catch (error) {
+            issues.push(`Diagnosis Error: Failed to diagnose permission issues: ${error.message}`);
+            console.error('Permission diagnosis failed:', error);
+        }
+        return issues;
     }
 }
 exports.GoogleAdsConversion = GoogleAdsConversion;
