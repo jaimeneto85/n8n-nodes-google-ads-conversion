@@ -650,30 +650,55 @@ class GoogleAdsConversion {
                     try {
                         // Get credentials and developer token from authentication
                         const credentials = await this.getCredentials('googleAdsOAuth2');
-                        // Get manager account info first
+                        if (!credentials) {
+                            throw new Error('No credentials provided for Google Ads OAuth2');
+                        }
+                        const managerCustomerId = credentials.customerId;
+                        const developerToken = credentials.developerToken;
+                        if (!managerCustomerId) {
+                            throw new Error('Manager customer ID is required');
+                        }
+                        const sanitizedManagerId = managerCustomerId.replace(/\D/g, '');
+                        const apiUrl = `/customers/${sanitizedManagerId}/googleAds:search`;
+                        const baseUrl = 'https://googleads.googleapis.com/v17';
+                        const requestHeaders = {
+                            'developer-token': developerToken,
+                            'login-customer-id': sanitizedManagerId,
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                        };
+                        const requestBody = {
+                            query: `
+							SELECT 
+								customer_client.client_customer,
+								customer_client.descriptive_name,
+								customer_client.currency_code,
+								customer_client.time_zone,
+								customer_client.status
+							FROM customer_client 
+							WHERE customer_client.status = 'ENABLED'
+						`,
+                            pageSize: 1000,
+                        };
+                        console.log('Manager Account Request Debug:', {
+                            rawCustomerId: managerCustomerId,
+                            sanitizedCustomerId: sanitizedManagerId,
+                            baseUrl,
+                            endpoint: apiUrl,
+                            fullUrl: `${baseUrl}${apiUrl}`,
+                            headers: {
+                                ...requestHeaders,
+                                'developer-token': developerToken ? '***HIDDEN***' : 'MISSING',
+                            },
+                            requestBody,
+                        });
                         const response = await this.helpers.httpRequestWithAuthentication.call(this, 'googleAdsOAuth2', {
                             method: 'POST',
-                            url: '/googleAds:search',
-                            body: {
-                                query: `
-									SELECT 
-										customer_client.client_customer,
-										customer_client.descriptive_name,
-										customer_client.currency_code,
-										customer_client.time_zone,
-										customer_client.status
-									FROM customer_client 
-									WHERE customer_client.status = 'ENABLED'
-								`,
-                                pageSize: 1000,
-                            },
-                            headers: {
-                                'developer-token': credentials.developerToken,
-                                'login-customer-id': credentials.customerId,
-                                Accept: 'application/json',
-                                'Content-Type': 'application/json',
-                            },
+                            url: apiUrl,
+                            body: requestBody,
+                            headers: requestHeaders,
                         });
+                        console.log('getManagedAccounts API Response:', response);
                         const results = [];
                         if (response.results && Array.isArray(response.results)) {
                             for (const result of response.results) {
@@ -690,11 +715,22 @@ class GoogleAdsConversion {
                                 }
                             }
                         }
+                        console.log('Managed accounts found:', results.length);
                         return {
                             results: results.sort((a, b) => a.name.localeCompare(b.name)),
                         };
                     }
                     catch (error) {
+                        console.error('getManagedAccounts ERROR:', {
+                            error: error.message,
+                            httpCode: error.httpCode || error.status,
+                            responseBody: error.response?.body || error.body,
+                            stack: error.stack,
+                            credentials: {
+                                hasCustomerId: !!(await this.getCredentials('googleAdsOAuth2'))?.customerId,
+                                hasDeveloperToken: !!(await this.getCredentials('googleAdsOAuth2'))?.developerToken,
+                            },
+                        });
                         throw new GoogleAdsApiError(this.getNode(), `Failed to load managed accounts: ${error.message}`, error.httpCode || 500, error.code);
                     }
                 },
@@ -839,6 +875,23 @@ class GoogleAdsConversion {
         const httpCode = error.httpCode || error.status || 0;
         const message = error.message || 'Unknown error occurred';
         const responseBody = error.response?.body || error.body;
+        // Log detailed error information to console for debugging
+        console.error('Google Ads API Error Details:', {
+            httpCode,
+            message,
+            responseBody,
+            requestUrl: error.config?.url || error.url || 'Unknown URL',
+            requestMethod: error.config?.method || error.method || 'Unknown Method',
+            requestHeaders: error.config?.headers
+                ? {
+                    ...error.config.headers,
+                    'developer-token': error.config.headers['developer-token'] ? '***HIDDEN***' : 'MISSING',
+                }
+                : 'No headers available',
+            requestBody: error.config?.data || error.config?.body || 'No request body available',
+            stack: error.stack,
+            fullError: error,
+        });
         // Check for URL-related errors first
         if (message.includes('ERR_INVALID_URL') || message.includes('Invalid URL')) {
             executeFunctions.logger.error('URL validation error:', {
@@ -876,6 +929,7 @@ class GoogleAdsConversion {
             }
             catch (parseError) {
                 executeFunctions.logger.debug('Failed to parse error response body:', parseError);
+                console.error('Failed to parse error response body:', parseError);
             }
         }
         // Categorize errors based on HTTP status codes
@@ -1648,6 +1702,17 @@ class GoogleAdsConversion {
                 returnData.push(...batchResult);
             }
             catch (error) {
+                console.error(`Google Ads Batch Processing Error (Batch ${batchIndex + 1}):`, {
+                    error: error.message,
+                    errorType: error.name || 'Unknown',
+                    httpCode: error.httpCode || 'Unknown',
+                    batchIndex: batchIndex + 1,
+                    totalBatches: batches.length,
+                    batchSize: batches[batchIndex].length,
+                    batchProcessingMode,
+                    fullError: error,
+                    batchData: batches[batchIndex],
+                });
                 if (batchProcessingMode === 'failFast') {
                     throw error;
                 }
@@ -1812,7 +1877,17 @@ class GoogleAdsConversion {
                     httpCode,
                     apiErrorCode,
                     operation,
+                    itemIndex: i + 1,
                 };
+                // Log detailed error to console for debugging
+                console.error(`Google Ads Conversion Error (Item ${i + 1}):`, {
+                    ...errorDetails,
+                    fullError: error,
+                    requestDetails: {
+                        operation,
+                        itemData: items[i].json,
+                    },
+                });
                 // Add URL-specific diagnostics for URL errors
                 if (errorType === 'GoogleAdsApiError' && apiErrorCode === 'ERR_INVALID_URL') {
                     try {
@@ -1829,10 +1904,15 @@ class GoogleAdsConversion {
                                 : 'Missing',
                             attemptedUrl: `/customers/${customerId ? customerId.replace(/\D/g, '') : 'undefined'}:uploadClickConversions`,
                         };
+                        console.error(`URL Construction Diagnostics (Item ${i + 1}):`, errorDetails.urlDiagnostics);
                         // Log detailed diagnostics for URL errors
                         executeFunctions.logger.error(`GoogleAdsConversion URL construction error for item ${i + 1}:`, errorDetails);
                     }
                     catch (diagError) {
+                        console.error(`Error collecting URL diagnostics (Item ${i + 1}):`, {
+                            originalError: errorMessage,
+                            diagnosticError: diagError.message,
+                        });
                         executeFunctions.logger.error(`Error while collecting URL diagnostics:`, {
                             originalError: errorMessage,
                             diagnosticError: diagError.message,
