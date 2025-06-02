@@ -896,7 +896,7 @@ class GoogleAdsConversion {
         console.error('Google Ads API Error Details:', {
             httpCode,
             message,
-            responseBody,
+            responseBody: responseBody ? JSON.stringify(responseBody, null, 2) : undefined,
             requestUrl: error.config?.url || error.url || 'Unknown URL',
             requestMethod: error.config?.method || error.method || 'Unknown Method',
             requestHeaders: error.config?.headers
@@ -905,7 +905,9 @@ class GoogleAdsConversion {
                     'developer-token': error.config.headers['developer-token'] ? '***HIDDEN***' : 'MISSING',
                 }
                 : 'No headers available',
-            requestBody: error.config?.data || error.config?.body || 'No request body available',
+            requestBody: error.config?.data || error.config?.body
+                ? JSON.stringify(error.config?.data || error.config?.body, null, 2)
+                : 'No request body available',
             stack: error.stack,
             fullError: error,
         });
@@ -1687,9 +1689,9 @@ class GoogleAdsConversion {
                     ...headers,
                     'developer-token': headers['developer-token'] ? '***HIDDEN***' : 'MISSING',
                 },
-                payload: requestPayload,
+                payload: JSON.stringify(requestPayload, null, 2),
                 customerId,
-                conversion: conversion,
+                conversion: JSON.stringify(conversion, null, 2),
                 itemIndex: itemIndex + 1,
             });
             // Make the API call using the full URL
@@ -1707,7 +1709,7 @@ class GoogleAdsConversion {
             console.log('Google Ads API Response Success:', {
                 status: 'success',
                 itemIndex: itemIndex + 1,
-                responseData: response,
+                responseData: JSON.stringify(response, null, 2),
             });
             return response;
         }, `Conversion Upload (Item ${itemIndex + 1})`, debugMode);
@@ -1739,7 +1741,7 @@ class GoogleAdsConversion {
         };
         if (debugMode) {
             executeFunctions.logger.debug(`Batch ${batchIndex + 1} Request Payload:`, {
-                payload: requestPayload,
+                payload: JSON.stringify(requestPayload, null, 2),
             });
         }
         // Validate customer ID format before constructing the URL
@@ -1776,6 +1778,7 @@ class GoogleAdsConversion {
             batchIndex: batchIndex + 1,
             totalBatches,
             conversionsCount: conversions.length,
+            conversionsPayload: JSON.stringify(conversions, null, 2),
         });
         // Validate URL before making the request
         const urlForValidation = `${baseUrl}${apiPath}`;
@@ -1881,7 +1884,7 @@ class GoogleAdsConversion {
                     batchSize: batches[batchIndex].length,
                     batchProcessingMode,
                     fullError: error,
-                    batchData: batches[batchIndex],
+                    batchData: JSON.stringify(batches[batchIndex], null, 2),
                 });
                 if (batchProcessingMode === 'failFast') {
                     throw error;
@@ -2055,7 +2058,7 @@ class GoogleAdsConversion {
                     fullError: error,
                     requestDetails: {
                         operation,
-                        itemData: items[i].json,
+                        itemData: JSON.stringify(items[i].json, null, 2),
                     },
                 });
                 // Add URL-specific diagnostics for URL errors

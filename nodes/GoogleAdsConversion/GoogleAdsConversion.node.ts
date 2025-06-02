@@ -985,7 +985,7 @@ export class GoogleAdsConversion implements INodeType {
 		console.error('Google Ads API Error Details:', {
 			httpCode,
 			message,
-			responseBody,
+			responseBody: responseBody ? JSON.stringify(responseBody, null, 2) : undefined,
 			requestUrl: error.config?.url || error.url || 'Unknown URL',
 			requestMethod: error.config?.method || error.method || 'Unknown Method',
 			requestHeaders: error.config?.headers
@@ -994,7 +994,10 @@ export class GoogleAdsConversion implements INodeType {
 						'developer-token': error.config.headers['developer-token'] ? '***HIDDEN***' : 'MISSING',
 					}
 				: 'No headers available',
-			requestBody: error.config?.data || error.config?.body || 'No request body available',
+			requestBody:
+				error.config?.data || error.config?.body
+					? JSON.stringify(error.config?.data || error.config?.body, null, 2)
+					: 'No request body available',
 			stack: error.stack,
 			fullError: error,
 		});
@@ -1475,13 +1478,13 @@ export class GoogleAdsConversion implements INodeType {
 			// For manager accounts, use the manager account ID as login-customer-id
 			// For regular accounts, use the same customer ID for both
 			const accountType = executeFunctions.getNodeParameter('accountType', 0, 'regular') as string;
-			
+
 			// IMPORTANT: Always include login-customer-id even for regular accounts
 			// This helps with proper authentication for both regular and manager accounts
 			const loginCustomerId = credentialCustomerId; // Always use the authenticated account ID as login customer
-			
+
 			const sanitizedLoginCustomerId = loginCustomerId.replace(/\D/g, '');
-			
+
 			// If login customer ID is missing or invalid after sanitization, log a warning
 			if (!sanitizedLoginCustomerId) {
 				executeFunctions.logger.warn(
@@ -2093,9 +2096,9 @@ export class GoogleAdsConversion implements INodeType {
 						...headers,
 						'developer-token': headers['developer-token'] ? '***HIDDEN***' : 'MISSING',
 					},
-					payload: requestPayload,
+					payload: JSON.stringify(requestPayload, null, 2),
 					customerId,
-					conversion: conversion,
+					conversion: JSON.stringify(conversion, null, 2),
 					itemIndex: itemIndex + 1,
 				});
 
@@ -2120,7 +2123,7 @@ export class GoogleAdsConversion implements INodeType {
 				console.log('Google Ads API Response Success:', {
 					status: 'success',
 					itemIndex: itemIndex + 1,
-					responseData: response,
+					responseData: JSON.stringify(response, null, 2),
 				});
 
 				return response;
@@ -2172,7 +2175,7 @@ export class GoogleAdsConversion implements INodeType {
 
 		if (debugMode) {
 			executeFunctions.logger.debug(`Batch ${batchIndex + 1} Request Payload:`, {
-				payload: requestPayload,
+				payload: JSON.stringify(requestPayload, null, 2),
 			});
 		}
 
@@ -2218,6 +2221,7 @@ export class GoogleAdsConversion implements INodeType {
 			batchIndex: batchIndex + 1,
 			totalBatches,
 			conversionsCount: conversions.length,
+			conversionsPayload: JSON.stringify(conversions, null, 2),
 		});
 
 		// Validate URL before making the request
@@ -2387,7 +2391,7 @@ export class GoogleAdsConversion implements INodeType {
 					batchSize: batches[batchIndex].length,
 					batchProcessingMode,
 					fullError: error,
-					batchData: batches[batchIndex],
+					batchData: JSON.stringify(batches[batchIndex], null, 2),
 				});
 
 				if (batchProcessingMode === 'failFast') {
@@ -2622,7 +2626,7 @@ export class GoogleAdsConversion implements INodeType {
 					fullError: error,
 					requestDetails: {
 						operation,
-						itemData: items[i].json,
+						itemData: JSON.stringify(items[i].json, null, 2),
 					},
 				});
 
