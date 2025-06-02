@@ -1618,9 +1618,6 @@ class GoogleAdsConversion {
         // Build the request payload
         const requestPayload = {
             conversions: [conversion],
-            partialFailurePolicy: {
-                partialFailureEnabled: true,
-            },
             validateOnly: validateOnly,
         };
         if (debugMode) {
@@ -1633,21 +1630,25 @@ class GoogleAdsConversion {
         if (!customerId || !/^\d+$/.test(customerId)) {
             throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid customer ID format: ${customerId}. Must contain only digits.`, 400, 'ERR_INVALID_CUSTOMER_ID');
         }
-        // Construct the full URL properly
+        // Construct the full URL properly with query parameters
         const baseUrl = 'https://googleads.googleapis.com/v17';
         const apiPath = `/customers/${customerId}:uploadClickConversions`;
-        const fullUrl = baseUrl + apiPath;
+        const queryParams = new URLSearchParams();
+        queryParams.append('partial_failure', 'true');
+        const fullUrl = `${baseUrl}${apiPath}?${queryParams.toString()}`;
         // Log the URL components for debugging
         if (debugMode) {
             executeFunctions.logger.debug('URL Components:', {
                 baseUrl,
                 apiPath,
+                queryParams: queryParams.toString(),
                 fullUrl,
             });
         }
         console.log('Google Ads Upload URL Debug:', {
             baseUrl,
             apiPath,
+            queryParams: queryParams.toString(),
             fullUrl,
             customerId,
             customerIdLength: customerId.length,
@@ -1657,8 +1658,9 @@ class GoogleAdsConversion {
             itemIndex: itemIndex + 1,
         });
         // Validate URL before making the request
+        const urlForValidation = `${baseUrl}${apiPath}`;
         if (!this.validateUrl(baseUrl, apiPath, executeFunctions)) {
-            throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid URL constructed for conversion upload. Base URL: ${baseUrl}, Path: ${apiPath}. Please check your customer ID format.`, 400, 'ERR_INVALID_URL');
+            throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid URL constructed for batch upload. Base URL: ${baseUrl}, Path: ${apiPath}. Please check your customer ID format.`, 400, 'ERR_INVALID_URL');
         }
         return await this.executeWithRetry(executeFunctions, async () => {
             const headers = await this.getAuthenticatedHeaders(executeFunctions);
@@ -1718,9 +1720,6 @@ class GoogleAdsConversion {
         // Build the batch request payload
         const requestPayload = {
             conversions: conversions,
-            partialFailurePolicy: {
-                partialFailureEnabled: batchProcessingMode === 'partialFailure',
-            },
             validateOnly: validateOnly,
         };
         if (debugMode) {
@@ -1732,21 +1731,27 @@ class GoogleAdsConversion {
         if (!customerId || !/^\d+$/.test(customerId)) {
             throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid customer ID format: ${customerId}. Must contain only digits.`, 400, 'ERR_INVALID_CUSTOMER_ID');
         }
-        // Construct the full URL properly
+        // Construct the full URL properly with query parameters
         const baseUrl = 'https://googleads.googleapis.com/v17';
         const apiPath = `/customers/${customerId}:uploadClickConversions`;
-        const fullUrl = baseUrl + apiPath;
+        const queryParams = new URLSearchParams();
+        if (batchProcessingMode === 'partialFailure') {
+            queryParams.append('partial_failure', 'true');
+        }
+        const fullUrl = `${baseUrl}${apiPath}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
         // Log the URL components for debugging
         if (debugMode) {
             executeFunctions.logger.debug('Batch URL Components:', {
                 baseUrl,
                 apiPath,
+                queryParams: queryParams.toString(),
                 fullUrl,
             });
         }
         console.log('Google Ads Batch Upload URL Debug:', {
             baseUrl,
             apiPath,
+            queryParams: queryParams.toString(),
             fullUrl,
             customerId,
             customerIdLength: customerId.length,
@@ -1758,6 +1763,7 @@ class GoogleAdsConversion {
             conversionsCount: conversions.length,
         });
         // Validate URL before making the request
+        const urlForValidation = `${baseUrl}${apiPath}`;
         if (!this.validateUrl(baseUrl, apiPath, executeFunctions)) {
             throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid URL constructed for batch upload. Base URL: ${baseUrl}, Path: ${apiPath}. Please check your customer ID format.`, 400, 'ERR_INVALID_URL');
         }
