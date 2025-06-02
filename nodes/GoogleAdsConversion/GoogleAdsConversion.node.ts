@@ -1024,39 +1024,121 @@ export class GoogleAdsConversion implements INodeType {
 		// Parse Google Ads specific error details if available
 		let apiErrorCode: string | undefined;
 		let detailedMessage = message;
+		let googleAdsErrors: any[] = [];
 
 		if (responseBody) {
 			try {
 				const errorData =
 					typeof responseBody === 'string' ? JSON.parse(responseBody) : responseBody;
 
+				console.error('Parsed Google Ads Error Response:', {
+					fullErrorData: errorData,
+					hasError: !!errorData.error,
+					hasDetails: !!errorData.error?.details,
+					errorStructure: errorData.error ? Object.keys(errorData.error) : 'No error object',
+				});
+
 				// Extract Google Ads error details
 				if (errorData.error) {
-					apiErrorCode = errorData.error.code;
+					apiErrorCode = errorData.error.code || errorData.error.status;
 					detailedMessage = errorData.error.message || message;
 
-					// Handle specific Google Ads error types
+					// Handle Google Ads specific error details structure
 					if (errorData.error.details) {
 						const details = Array.isArray(errorData.error.details)
 							? errorData.error.details
 							: [errorData.error.details];
-						const errorDetails = details.map((detail: any) => detail.message || detail).join('; ');
-						detailedMessage += ` Details: ${errorDetails}`;
+
+						// Extract specific Google Ads errors
+						for (const detail of details) {
+							if (detail.errors && Array.isArray(detail.errors)) {
+								googleAdsErrors.push(...detail.errors);
+							} else if (detail.googleAdsFailure && detail.googleAdsFailure.errors) {
+								googleAdsErrors.push(...detail.googleAdsFailure.errors);
+							} else if (detail.message) {
+								googleAdsErrors.push({ message: detail.message });
+							}
+						}
+
+						if (googleAdsErrors.length > 0) {
+							const errorMessages = googleAdsErrors
+								.map((err: any) => {
+									let errorMsg = err.message || err.errorCode || 'Unknown error';
+									if (err.location && err.location.fieldPath) {
+										errorMsg += ` (Field: ${err.location.fieldPath})`;
+									}
+									if (err.trigger && err.trigger.stringValue) {
+										errorMsg += ` (Value: ${err.trigger.stringValue})`;
+									}
+									return errorMsg;
+								})
+								.join('; ');
+							detailedMessage = `${detailedMessage}. Specific errors: ${errorMessages}`;
+						} else {
+							const errorDetails = details
+								.map((detail: any) => detail.message || detail)
+								.join('; ');
+							detailedMessage += ` Details: ${errorDetails}`;
+						}
 					}
+				}
+
+				// Log structured Google Ads errors for debugging
+				if (googleAdsErrors.length > 0) {
+					console.error('Google Ads Specific Errors:', {
+						totalErrors: googleAdsErrors.length,
+						errors: googleAdsErrors.map((err: any) => ({
+							errorCode: err.errorCode,
+							message: err.message,
+							fieldPath: err.location?.fieldPath,
+							triggerValue: err.trigger?.stringValue,
+							fullError: err,
+						})),
+					});
 				}
 			} catch (parseError) {
 				executeFunctions.logger.debug('Failed to parse error response body:', parseError);
 				console.error('Failed to parse error response body:', parseError);
+				console.error('Raw response body that failed to parse:', responseBody);
 			}
 		}
 
 		// Categorize errors based on HTTP status codes
 		switch (httpCode) {
 			case 400:
-				return new GoogleAdsValidationError(
-					executeFunctions.getNode(),
-					`Invalid request parameters. ${detailedMessage}. Please check your conversion data, identifiers, and format.`
-				);
+				// Provide more specific guidance for 400 errors
+				let validationMessage = `Invalid request parameters. ${detailedMessage}`;
+
+				if (googleAdsErrors.length > 0) {
+					// Check for common error patterns and provide specific guidance
+					const fieldErrors = googleAdsErrors.filter((err) => err.location?.fieldPath);
+					if (fieldErrors.length > 0) {
+						const fieldsWithErrors = fieldErrors.map((err) => err.location.fieldPath).join(', ');
+						validationMessage += ` Check these fields: ${fieldsWithErrors}`;
+					}
+
+					// Check for conversion action errors
+					const conversionActionErrors = googleAdsErrors.filter(
+						(err) =>
+							err.message?.includes('conversion_action') ||
+							err.location?.fieldPath?.includes('conversion_action')
+					);
+					if (conversionActionErrors.length > 0) {
+						validationMessage += ` Verify your conversion action ID is correct and accessible.`;
+					}
+
+					// Check for customer ID errors
+					const customerIdErrors = googleAdsErrors.filter(
+						(err) => err.message?.includes('customer') || err.message?.includes('login-customer-id')
+					);
+					if (customerIdErrors.length > 0) {
+						validationMessage += ` Verify your customer ID and login-customer-id settings.`;
+					}
+				} else {
+					validationMessage += ` Please check your conversion data, identifiers, customer ID, and conversion action format.`;
+				}
+
+				return new GoogleAdsValidationError(executeFunctions.getNode(), validationMessage);
 
 			case 401:
 				return new GoogleAdsAuthenticationError(
@@ -1124,10 +1206,11 @@ export class GoogleAdsConversion implements INodeType {
 				// Basic validation: try to parse the string
 				const parsed = new Date(dateTimeValue);
 				if (!isNaN(parsed.getTime())) {
-					return dateTimeValue;
+					// Convert to Google Ads expected format: YYYY-MM-DD HH:mm:ss+TZ
+					return this.formatDateForGoogleAds(parsed);
 				}
 				// If string is invalid, fall back to current time
-				return new Date().toISOString();
+				return this.formatDateForGoogleAds(new Date());
 			}
 
 			// If it's an array, use the first item
@@ -1136,7 +1219,7 @@ export class GoogleAdsConversion implements INodeType {
 					return this.convertDateTimeToString(dateTimeValue[0]);
 				}
 				// Empty array, use current time
-				return new Date().toISOString();
+				return this.formatDateForGoogleAds(new Date());
 			}
 
 			// Handle n8n DateTime objects and other objects
@@ -1144,10 +1227,10 @@ export class GoogleAdsConversion implements INodeType {
 				// Check if it's a Date object
 				if (dateTimeValue instanceof Date) {
 					if (!isNaN(dateTimeValue.getTime())) {
-						return dateTimeValue.toISOString();
+						return this.formatDateForGoogleAds(dateTimeValue);
 					}
 					// Invalid date object
-					return new Date().toISOString();
+					return this.formatDateForGoogleAds(new Date());
 				}
 
 				// Check if it has a toString method (n8n DateTime objects)
@@ -1156,17 +1239,18 @@ export class GoogleAdsConversion implements INodeType {
 					// Validate the string result
 					const parsed = new Date(stringValue);
 					if (!isNaN(parsed.getTime())) {
-						return stringValue;
+						return this.formatDateForGoogleAds(parsed);
 					}
 				}
 
 				// Check if it has toISOString method
 				if (dateTimeValue.toISOString && typeof dateTimeValue.toISOString === 'function') {
 					try {
-						return dateTimeValue.toISOString();
+						const isoString = dateTimeValue.toISOString();
+						return this.formatDateForGoogleAds(new Date(isoString));
 					} catch (error) {
 						// toISOString failed, fall back
-						return new Date().toISOString();
+						return this.formatDateForGoogleAds(new Date());
 					}
 				}
 			}
@@ -1175,10 +1259,10 @@ export class GoogleAdsConversion implements INodeType {
 			if (typeof dateTimeValue === 'number') {
 				const dateFromNumber = new Date(dateTimeValue);
 				if (!isNaN(dateFromNumber.getTime())) {
-					return dateFromNumber.toISOString();
+					return this.formatDateForGoogleAds(dateFromNumber);
 				}
 				// Invalid number, use current time
-				return new Date().toISOString();
+				return this.formatDateForGoogleAds(new Date());
 			}
 
 			// Fallback: try to convert to string and parse
@@ -1186,17 +1270,45 @@ export class GoogleAdsConversion implements INodeType {
 				const stringValue = String(dateTimeValue);
 				const parsed = new Date(stringValue);
 				if (!isNaN(parsed.getTime())) {
-					return stringValue;
+					return this.formatDateForGoogleAds(parsed);
 				}
 			} catch (error) {
 				// String conversion failed
 			}
 
 			// Final fallback: current time
-			return new Date().toISOString();
+			return this.formatDateForGoogleAds(new Date());
 		} catch (error) {
 			// Any unexpected error, use current time
-			return new Date().toISOString();
+			return this.formatDateForGoogleAds(new Date());
+		}
+	}
+
+	/**
+	 * Format date for Google Ads API (YYYY-MM-DD HH:mm:ss+TZ)
+	 */
+	private formatDateForGoogleAds(date: Date): string {
+		try {
+			// Google Ads expects format: YYYY-MM-DD HH:mm:ss+TZ
+			// We'll use ISO string and adjust format
+			const isoString = date.toISOString();
+
+			// Convert from "2024-01-15T14:30:00.000Z" to "2024-01-15 14:30:00+00:00"
+			const formatted = isoString
+				.replace('T', ' ') // Replace T with space
+				.replace(/\.\d{3}Z$/, '+00:00'); // Replace .000Z with +00:00
+
+			console.log('Date formatting debug:', {
+				originalDate: date,
+				isoString: isoString,
+				formattedForGoogleAds: formatted,
+			});
+
+			return formatted;
+		} catch (error) {
+			console.error('Error formatting date for Google Ads:', error);
+			// Fallback to ISO string
+			return date.toISOString();
 		}
 	}
 
@@ -1948,6 +2060,22 @@ export class GoogleAdsConversion implements INodeType {
 		return await this.executeWithRetry(
 			executeFunctions,
 			async () => {
+				const headers = await this.getAuthenticatedHeaders(executeFunctions);
+
+				// Log detailed request information for debugging
+				console.log('Google Ads API Request Debug:', {
+					url: fullUrl,
+					method: 'POST',
+					headers: {
+						...headers,
+						'developer-token': headers['developer-token'] ? '***HIDDEN***' : 'MISSING',
+					},
+					payload: requestPayload,
+					customerId,
+					conversion: conversion,
+					itemIndex: itemIndex + 1,
+				});
+
 				// Make the API call using the full URL
 				const response = await executeFunctions.helpers.httpRequestWithAuthentication.call(
 					executeFunctions,
@@ -1956,7 +2084,7 @@ export class GoogleAdsConversion implements INodeType {
 						method: 'POST',
 						url: fullUrl,
 						body: requestPayload,
-						headers: await this.getAuthenticatedHeaders(executeFunctions),
+						headers: headers,
 						timeout: 30000,
 						ignoreHttpStatusErrors: false,
 					}
@@ -1965,6 +2093,12 @@ export class GoogleAdsConversion implements INodeType {
 				if (debugMode) {
 					executeFunctions.logger.debug('Google Ads Conversion API Response:', { response });
 				}
+
+				console.log('Google Ads API Response Success:', {
+					status: 'success',
+					itemIndex: itemIndex + 1,
+					responseData: response,
+				});
 
 				return response;
 			},

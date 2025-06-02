@@ -35,6 +35,10 @@ export declare class GoogleAdsConversion implements INodeType {
      */
     private convertDateTimeToString;
     /**
+     * Format date for Google Ads API (YYYY-MM-DD HH:mm:ss+TZ)
+     */
+    private formatDateForGoogleAds;
+    /**
      * Validate input parameters before making API calls
      */
     private validateInputParameters;
