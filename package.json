@@ -1,6 +1,6 @@
 {
 	"name": "@jaimeflneto/n8n-nodes-google-ads-conversion",
-	"version": "0.7.5",
+	"version": "0.7.6",
 	"description": "n8n node for tracking conversions in Google Ads with support for batch processing, enhanced conversions, and comprehensive privacy compliance",
 	"keywords": [
 		"n8n-community-node-package",
