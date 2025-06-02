@@ -29,7 +29,7 @@ class GoogleAdsValidationError extends NodeOperationError {
 class GoogleAdsApiError extends NodeOperationError {
 	public httpCode: number;
 	public apiErrorCode?: string;
-	
+
 	constructor(node: any, message: string, httpCode: number, apiErrorCode?: string) {
 		super(node, `Google Ads API Error: ${message}`);
 		this.name = 'GoogleAdsApiError';
@@ -40,7 +40,7 @@ class GoogleAdsApiError extends NodeOperationError {
 
 class GoogleAdsRateLimitError extends NodeOperationError {
 	public retryAfter?: number;
-	
+
 	constructor(node: any, message: string, retryAfter?: number) {
 		super(node, `Rate Limit Error: ${message}`);
 		this.name = 'GoogleAdsRateLimitError';
@@ -62,7 +62,7 @@ export class GoogleAdsConversion implements INodeType {
 		},
 		// @ts-ignore - Compatibility with different n8n versions
 		inputs: ['main'],
-		// @ts-ignore - Compatibility with different n8n versions  
+		// @ts-ignore - Compatibility with different n8n versions
 		outputs: ['main'],
 		credentials: [
 			{
@@ -73,7 +73,7 @@ export class GoogleAdsConversion implements INodeType {
 		requestDefaults: {
 			baseURL: 'https://googleads.googleapis.com/v17',
 			headers: {
-				'Accept': 'application/json',
+				Accept: 'application/json',
 				'Content-Type': 'application/json',
 			},
 		},
@@ -193,7 +193,8 @@ export class GoogleAdsConversion implements INodeType {
 				type: 'string',
 				required: true,
 				default: '={{$now}}',
-				description: 'The date and time of the conversion. Accepts DateTime objects (like $now) or strings in YYYY-MM-DD HH:MM:SS+TZ format',
+				description:
+					'The date and time of the conversion. Accepts DateTime objects (like $now) or strings in YYYY-MM-DD HH:MM:SS+TZ format',
 				hint: 'Example: 2024-01-15 14:30:00+00:00 or use {{$now}} for current time',
 				displayOptions: {
 					show: {
@@ -267,7 +268,7 @@ export class GoogleAdsConversion implements INodeType {
 					},
 					{
 						name: 'WBRAID (iOS Web-to-App)',
-						value: 'wbraid', 
+						value: 'wbraid',
 						description: 'Use WBRAID for iOS web-to-app conversions',
 					},
 					{
@@ -674,7 +675,7 @@ export class GoogleAdsConversion implements INodeType {
 				try {
 					// Get credentials and developer token from authentication
 					const credentials = await this.getCredentials('googleAdsOAuth2');
-					
+
 					// Get manager account info first
 					const response = await this.helpers.httpRequestWithAuthentication.call(
 						this,
@@ -698,14 +699,14 @@ export class GoogleAdsConversion implements INodeType {
 							headers: {
 								'developer-token': credentials.developerToken as string,
 								'login-customer-id': credentials.customerId as string,
-								'Accept': 'application/json',
+								Accept: 'application/json',
 								'Content-Type': 'application/json',
 							},
 						}
 					);
 
 					const results: INodeListSearchItems[] = [];
-					
+
 					if (response.results && Array.isArray(response.results)) {
 						for (const result of response.results) {
 							const client = result.customerClient;
@@ -714,7 +715,7 @@ export class GoogleAdsConversion implements INodeType {
 								const name = client.descriptiveName || `Account ${customerId}`;
 								const currency = client.currencyCode || '';
 								const timezone = client.timeZone || '';
-								
+
 								results.push({
 									name: `${name} (${customerId})${currency ? ` - ${currency}` : ''}${timezone ? ` - ${timezone}` : ''}`,
 									value: customerId,
@@ -726,7 +727,6 @@ export class GoogleAdsConversion implements INodeType {
 					return {
 						results: results.sort((a, b) => a.name.localeCompare(b.name)),
 					};
-
 				} catch (error: any) {
 					throw new GoogleAdsApiError(
 						this.getNode(),
@@ -743,7 +743,7 @@ export class GoogleAdsConversion implements INodeType {
 	 * Sleep utility for retry delays
 	 */
 	private async sleep(ms: number): Promise<void> {
-		return new Promise(resolve => setTimeout(resolve, ms));
+		return new Promise((resolve) => setTimeout(resolve, ms));
 	}
 
 	/**
@@ -792,7 +792,10 @@ export class GoogleAdsConversion implements INodeType {
 		}
 
 		// Don't retry authentication or validation errors
-		if (error instanceof GoogleAdsAuthenticationError || error instanceof GoogleAdsValidationError) {
+		if (
+			error instanceof GoogleAdsAuthenticationError ||
+			error instanceof GoogleAdsValidationError
+		) {
 			return false;
 		}
 
@@ -815,7 +818,7 @@ export class GoogleAdsConversion implements INodeType {
 
 		// Exponential backoff: baseDelay * (2 ^ retryAttempt) + jitter
 		const exponentialDelay = config.baseDelayMs * Math.pow(2, retryAttempt);
-		
+
 		// Add jitter to prevent thundering herd (±25% random variation)
 		const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
 		const delayWithJitter = exponentialDelay + jitter;
@@ -839,17 +842,18 @@ export class GoogleAdsConversion implements INodeType {
 		for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
 			try {
 				if (debugMode && attempt > 0) {
-					executeFunctions.logger.debug(`${context}: Retry attempt ${attempt}/${config.maxRetries}`);
+					executeFunctions.logger.debug(
+						`${context}: Retry attempt ${attempt}/${config.maxRetries}`
+					);
 				}
 
 				const result = await operation();
-				
+
 				if (debugMode && attempt > 0) {
 					executeFunctions.logger.debug(`${context}: Retry successful on attempt ${attempt}`);
 				}
 
 				return result;
-
 			} catch (error) {
 				lastError = error;
 
@@ -941,16 +945,19 @@ export class GoogleAdsConversion implements INodeType {
 
 		if (responseBody) {
 			try {
-				const errorData = typeof responseBody === 'string' ? JSON.parse(responseBody) : responseBody;
-				
+				const errorData =
+					typeof responseBody === 'string' ? JSON.parse(responseBody) : responseBody;
+
 				// Extract Google Ads error details
 				if (errorData.error) {
 					apiErrorCode = errorData.error.code;
 					detailedMessage = errorData.error.message || message;
-					
+
 					// Handle specific Google Ads error types
 					if (errorData.error.details) {
-						const details = Array.isArray(errorData.error.details) ? errorData.error.details : [errorData.error.details];
+						const details = Array.isArray(errorData.error.details)
+							? errorData.error.details
+							: [errorData.error.details];
 						const errorDetails = details.map((detail: any) => detail.message || detail).join('; ');
 						detailedMessage += ` Details: ${errorDetails}`;
 					}
@@ -988,9 +995,10 @@ export class GoogleAdsConversion implements INodeType {
 
 			case 429:
 				// Extract retry-after header if available
-				const retryAfter = error.response?.headers?.['retry-after'] ? 
-					parseInt(error.response.headers['retry-after']) : undefined;
-				
+				const retryAfter = error.response?.headers?.['retry-after']
+					? parseInt(error.response.headers['retry-after'])
+					: undefined;
+
 				return new GoogleAdsRateLimitError(
 					executeFunctions.getNode(),
 					`Rate limit exceeded. ${detailedMessage}. Please implement retry logic or reduce request frequency.`,
@@ -1022,46 +1030,109 @@ export class GoogleAdsConversion implements INodeType {
 	 * Convert n8n DateTime objects or strings to ISO string format
 	 */
 	private convertDateTimeToString(dateTimeValue: any): string {
-		if (!dateTimeValue) {
-			return '';
-		}
-
-		// Handle n8n DateTime objects
-		if (typeof dateTimeValue === 'object') {
-			// Check if it's a Date object
-			if (dateTimeValue instanceof Date) {
-				return dateTimeValue.toISOString();
+		try {
+			// If null or undefined, use current time
+			if (!dateTimeValue) {
+				return new Date().toISOString();
 			}
-			// Check if it has a toString method (n8n DateTime objects)
-			if (dateTimeValue.toString && typeof dateTimeValue.toString === 'function') {
-				return dateTimeValue.toString();
+
+			// If it's already a string, validate and return
+			if (typeof dateTimeValue === 'string') {
+				// Basic validation: try to parse the string
+				const parsed = new Date(dateTimeValue);
+				if (!isNaN(parsed.getTime())) {
+					return dateTimeValue;
+				}
+				// If string is invalid, fall back to current time
+				return new Date().toISOString();
 			}
-			// Check if it has toISOString method
-			if (dateTimeValue.toISOString && typeof dateTimeValue.toISOString === 'function') {
-				return dateTimeValue.toISOString();
+
+			// If it's an array, use the first item
+			if (Array.isArray(dateTimeValue)) {
+				if (dateTimeValue.length > 0) {
+					return this.convertDateTimeToString(dateTimeValue[0]);
+				}
+				// Empty array, use current time
+				return new Date().toISOString();
 			}
-		}
 
-		// Handle strings and numbers (timestamps)
-		if (typeof dateTimeValue === 'string') {
-			return dateTimeValue;
-		}
+			// Handle n8n DateTime objects and other objects
+			if (typeof dateTimeValue === 'object') {
+				// Check if it's a Date object
+				if (dateTimeValue instanceof Date) {
+					if (!isNaN(dateTimeValue.getTime())) {
+						return dateTimeValue.toISOString();
+					}
+					// Invalid date object
+					return new Date().toISOString();
+				}
 
-		if (typeof dateTimeValue === 'number') {
-			return new Date(dateTimeValue).toISOString();
-		}
+				// Check if it has a toString method (n8n DateTime objects)
+				if (dateTimeValue.toString && typeof dateTimeValue.toString === 'function') {
+					const stringValue = dateTimeValue.toString();
+					// Validate the string result
+					const parsed = new Date(stringValue);
+					if (!isNaN(parsed.getTime())) {
+						return stringValue;
+					}
+				}
 
-		// Fallback: try to convert to string
-		return String(dateTimeValue);
+				// Check if it has toISOString method
+				if (dateTimeValue.toISOString && typeof dateTimeValue.toISOString === 'function') {
+					try {
+						return dateTimeValue.toISOString();
+					} catch (error) {
+						// toISOString failed, fall back
+						return new Date().toISOString();
+					}
+				}
+			}
+
+			// Handle numbers (timestamps)
+			if (typeof dateTimeValue === 'number') {
+				const dateFromNumber = new Date(dateTimeValue);
+				if (!isNaN(dateFromNumber.getTime())) {
+					return dateFromNumber.toISOString();
+				}
+				// Invalid number, use current time
+				return new Date().toISOString();
+			}
+
+			// Fallback: try to convert to string and parse
+			try {
+				const stringValue = String(dateTimeValue);
+				const parsed = new Date(stringValue);
+				if (!isNaN(parsed.getTime())) {
+					return stringValue;
+				}
+			} catch (error) {
+				// String conversion failed
+			}
+
+			// Final fallback: current time
+			return new Date().toISOString();
+		} catch (error) {
+			// Any unexpected error, use current time
+			return new Date().toISOString();
+		}
 	}
 
 	/**
 	 * Validate input parameters before making API calls
 	 */
 	private validateInputParameters(executeFunctions: IExecuteFunctions, itemIndex: number): void {
-		const identificationMethod = executeFunctions.getNodeParameter('identificationMethod', itemIndex) as string;
-		const conversionAction = executeFunctions.getNodeParameter('conversionAction', itemIndex) as string;
-		const conversionDateTimeRaw = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
+		const identificationMethod = executeFunctions.getNodeParameter(
+			'identificationMethod',
+			itemIndex
+		) as string;
+		const conversionAction = executeFunctions.getNodeParameter(
+			'conversionAction',
+			itemIndex
+		) as string;
+		const conversionDateTimeRaw = executeFunctions.getNodeParameter(
+			'conversionDateTime',
+			itemIndex
+		);
 
 		// Convert DateTime objects from n8n to string
 		const conversionDateTime = this.convertDateTimeToString(conversionDateTimeRaw);
@@ -1121,13 +1192,22 @@ export class GoogleAdsConversion implements INodeType {
 			case 'enhanced':
 				// For enhanced conversions, at least one identifier must be provided
 				const email = executeFunctions.getNodeParameter('email', itemIndex, '') as string;
-				const phoneNumber = executeFunctions.getNodeParameter('phoneNumber', itemIndex, '') as string;
+				const phoneNumber = executeFunctions.getNodeParameter(
+					'phoneNumber',
+					itemIndex,
+					''
+				) as string;
 				const firstName = executeFunctions.getNodeParameter('firstName', itemIndex, '') as string;
 				const lastName = executeFunctions.getNodeParameter('lastName', itemIndex, '') as string;
-				const streetAddress = executeFunctions.getNodeParameter('streetAddress', itemIndex, '') as string;
-				
-				const hasUserData = [email, phoneNumber, firstName, lastName, streetAddress]
-					.some(field => field && field.trim() !== '');
+				const streetAddress = executeFunctions.getNodeParameter(
+					'streetAddress',
+					itemIndex,
+					''
+				) as string;
+
+				const hasUserData = [email, phoneNumber, firstName, lastName, streetAddress].some(
+					(field) => field && field.trim() !== ''
+				);
 
 				if (!hasUserData) {
 					throw new GoogleAdsValidationError(
@@ -1164,13 +1244,18 @@ export class GoogleAdsConversion implements INodeType {
 	/**
 	 * Get authenticated headers for Google Ads API
 	 */
-	private async getAuthenticatedHeaders(executeFunctions: IExecuteFunctions): Promise<Record<string, string>> {
+	private async getAuthenticatedHeaders(
+		executeFunctions: IExecuteFunctions
+	): Promise<Record<string, string>> {
 		try {
 			// Get OAuth2 credentials from n8n credential system
 			const credentials = await executeFunctions.getCredentials('googleAdsOAuth2');
-			
+
 			if (!credentials) {
-				throw new GoogleAdsAuthenticationError(executeFunctions.getNode(), 'No credentials provided for Google Ads OAuth2');
+				throw new GoogleAdsAuthenticationError(
+					executeFunctions.getNode(),
+					'No credentials provided for Google Ads OAuth2'
+				);
 			}
 
 			// Extract credential values
@@ -1178,7 +1263,10 @@ export class GoogleAdsConversion implements INodeType {
 			const credentialCustomerId = credentials.customerId as string;
 
 			if (!developerToken || !credentialCustomerId) {
-				throw new GoogleAdsAuthenticationError(executeFunctions.getNode(), 'Missing required credentials: developer token and customer ID must be provided');
+				throw new GoogleAdsAuthenticationError(
+					executeFunctions.getNode(),
+					'Missing required credentials: developer token and customer ID must be provided'
+				);
 			}
 
 			// For manager accounts, use the manager account ID as login-customer-id
@@ -1190,21 +1278,27 @@ export class GoogleAdsConversion implements INodeType {
 			return {
 				'developer-token': developerToken,
 				'login-customer-id': loginCustomerId.replace(/\D/g, ''), // Sanitize the login customer ID
-				'Accept': 'application/json',
+				Accept: 'application/json',
 				'Content-Type': 'application/json',
 			};
 		} catch (error) {
 			if (error instanceof GoogleAdsAuthenticationError) {
 				throw error;
 			}
-			throw new GoogleAdsAuthenticationError(executeFunctions.getNode(), `Failed to setup authentication: ${(error as Error).message}`);
+			throw new GoogleAdsAuthenticationError(
+				executeFunctions.getNode(),
+				`Failed to setup authentication: ${(error as Error).message}`
+			);
 		}
 	}
 
 	/**
 	 * Validate credentials and test API connectivity with retry
 	 */
-	private async validateCredentials(executeFunctions: IExecuteFunctions, headers: Record<string, string>): Promise<void> {
+	private async validateCredentials(
+		executeFunctions: IExecuteFunctions,
+		headers: Record<string, string>
+	): Promise<void> {
 		const debugMode = executeFunctions.getNodeParameter('debugMode', 0, false) as boolean;
 
 		// Get customer ID for validation
@@ -1212,14 +1306,17 @@ export class GoogleAdsConversion implements INodeType {
 		try {
 			customerId = await this.getCustomerId(executeFunctions);
 		} catch (error) {
-			executeFunctions.logger.error('Failed to get valid customer ID during credential validation:', error);
+			executeFunctions.logger.error(
+				'Failed to get valid customer ID during credential validation:',
+				error
+			);
 			throw error;
 		}
 
 		// Construct and validate the URL
 		const apiEndpoint = `/customers/${customerId}/googleAds:search`;
 		const baseUrl = 'https://googleads.googleapis.com/v17';
-		
+
 		// Validate URL before making the request
 		if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
 			throw new GoogleAdsApiError(
@@ -1282,24 +1379,28 @@ export class GoogleAdsConversion implements INodeType {
 
 			// Attempt to construct a URL object to validate
 			const url = new URL(path, baseUrl);
-			
+
 			// Additional validation on the constructed URL
 			if (!url.href || url.href === baseUrl + '/') {
 				executeFunctions.logger.error('URL construction resulted in invalid URL:', {
-					baseUrl, path, constructedUrl: url.href
+					baseUrl,
+					path,
+					constructedUrl: url.href,
 				});
 				return false;
 			}
-			
+
 			executeFunctions.logger.debug('URL validation successful:', {
-				baseUrl, path, constructedUrl: url.href
+				baseUrl,
+				path,
+				constructedUrl: url.href,
 			});
 			return true;
 		} catch (error) {
 			executeFunctions.logger.error('URL validation failed:', {
 				baseUrl,
 				path,
-				error: (error as Error).message
+				error: (error as Error).message,
 			});
 			return false;
 		}
@@ -1312,10 +1413,10 @@ export class GoogleAdsConversion implements INodeType {
 		if (!input || input.trim() === '') {
 			return '';
 		}
-		
+
 		// Normalize the input (lowercase and trim)
 		const normalized = input.toLowerCase().trim();
-		
+
 		// Use Node.js crypto to create SHA-256 hash
 		return createHash('sha256').update(normalized, 'utf8').digest('hex');
 	}
@@ -1323,7 +1424,10 @@ export class GoogleAdsConversion implements INodeType {
 	/**
 	 * Build user identifier data for enhanced conversions
 	 */
-	private async buildUserIdentifiers(executeFunctions: IExecuteFunctions, itemIndex: number): Promise<any[]> {
+	private async buildUserIdentifiers(
+		executeFunctions: IExecuteFunctions,
+		itemIndex: number
+	): Promise<any[]> {
 		const userIdentifiers: any[] = [];
 
 		// Get enhanced conversion data
@@ -1331,7 +1435,11 @@ export class GoogleAdsConversion implements INodeType {
 		const phoneNumber = executeFunctions.getNodeParameter('phoneNumber', itemIndex, '') as string;
 		const firstName = executeFunctions.getNodeParameter('firstName', itemIndex, '') as string;
 		const lastName = executeFunctions.getNodeParameter('lastName', itemIndex, '') as string;
-		const streetAddress = executeFunctions.getNodeParameter('streetAddress', itemIndex, '') as string;
+		const streetAddress = executeFunctions.getNodeParameter(
+			'streetAddress',
+			itemIndex,
+			''
+		) as string;
 		const city = executeFunctions.getNodeParameter('city', itemIndex, '') as string;
 		const state = executeFunctions.getNodeParameter('state', itemIndex, '') as string;
 		const postalCode = executeFunctions.getNodeParameter('postalCode', itemIndex, '') as string;
@@ -1354,7 +1462,7 @@ export class GoogleAdsConversion implements INodeType {
 		// Add address identifier if we have enough information
 		if (firstName || lastName || streetAddress || city || state || postalCode || countryCode) {
 			const addressInfo: any = {};
-			
+
 			if (firstName) addressInfo.hashedFirstName = await this.hashString(firstName);
 			if (lastName) addressInfo.hashedLastName = await this.hashString(lastName);
 			if (streetAddress) addressInfo.hashedStreetAddress = await this.hashString(streetAddress);
@@ -1372,15 +1480,43 @@ export class GoogleAdsConversion implements INodeType {
 	/**
 	 * Build conversion payload for Google Ads API
 	 */
-	private async buildConversionPayload(executeFunctions: IExecuteFunctions, itemIndex: number): Promise<any> {
-		const identificationMethod = executeFunctions.getNodeParameter('identificationMethod', itemIndex) as string;
-		const conversionAction = executeFunctions.getNodeParameter('conversionAction', itemIndex) as string;
-		const conversionDateTimeRaw = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
-		const conversionValue = executeFunctions.getNodeParameter('conversionValue', itemIndex, 0) as number;
-		const currencyCode = executeFunctions.getNodeParameter('currencyCode', itemIndex, 'USD') as string;
+	private async buildConversionPayload(
+		executeFunctions: IExecuteFunctions,
+		itemIndex: number
+	): Promise<any> {
+		const identificationMethod = executeFunctions.getNodeParameter(
+			'identificationMethod',
+			itemIndex
+		) as string;
+		const conversionAction = executeFunctions.getNodeParameter(
+			'conversionAction',
+			itemIndex
+		) as string;
+		const conversionDateTimeRaw = executeFunctions.getNodeParameter(
+			'conversionDateTime',
+			itemIndex
+		);
+		const conversionValue = executeFunctions.getNodeParameter(
+			'conversionValue',
+			itemIndex,
+			0
+		) as number;
+		const currencyCode = executeFunctions.getNodeParameter(
+			'currencyCode',
+			itemIndex,
+			'USD'
+		) as string;
 		const orderId = executeFunctions.getNodeParameter('orderId', itemIndex, '') as string;
-		const adUserDataConsent = executeFunctions.getNodeParameter('adUserDataConsent', itemIndex, 'UNKNOWN') as string;
-		const adPersonalizationConsent = executeFunctions.getNodeParameter('adPersonalizationConsent', itemIndex, 'UNKNOWN') as string;
+		const adUserDataConsent = executeFunctions.getNodeParameter(
+			'adUserDataConsent',
+			itemIndex,
+			'UNKNOWN'
+		) as string;
+		const adPersonalizationConsent = executeFunctions.getNodeParameter(
+			'adPersonalizationConsent',
+			itemIndex,
+			'UNKNOWN'
+		) as string;
 		const debugMode = executeFunctions.getNodeParameter('debugMode', itemIndex, false) as boolean;
 
 		// Convert DateTime objects from n8n to string
@@ -1400,12 +1536,12 @@ export class GoogleAdsConversion implements INodeType {
 
 		// Format conversion action resource name
 		let formattedConversionAction: string;
-		
+
 		// Log the original conversion action ID for debugging
 		if (debugMode) {
 			executeFunctions.logger.debug('Original Conversion Action ID:', { conversionAction });
 		}
-		
+
 		// Check if it's already a fully qualified resource name
 		if (conversionAction.startsWith('customers/')) {
 			// Validate the format of the fully qualified resource name
@@ -1418,29 +1554,35 @@ export class GoogleAdsConversion implements INodeType {
 				);
 			}
 			formattedConversionAction = conversionAction;
-			
+
 			if (debugMode) {
-				executeFunctions.logger.debug('Using fully qualified conversion action resource name:', { formattedConversionAction });
+				executeFunctions.logger.debug('Using fully qualified conversion action resource name:', {
+					formattedConversionAction,
+				});
 			}
 		} else {
 			// Validate the conversion action ID format before sanitizing
 			if (!/^[\w\-]+$/.test(conversionAction)) {
-				executeFunctions.logger.warn('Conversion Action ID contains potentially invalid characters:', {
-					conversionAction,
-					recommendation: 'Use only alphanumeric characters, underscores, and hyphens for conversion action IDs'
-				});
+				executeFunctions.logger.warn(
+					'Conversion Action ID contains potentially invalid characters:',
+					{
+						conversionAction,
+						recommendation:
+							'Use only alphanumeric characters, underscores, and hyphens for conversion action IDs',
+					}
+				);
 			}
-			
+
 			// Remove any non-alphanumeric characters except for underscores and hyphens from the conversion action ID
 			const sanitizedConversionAction = conversionAction.replace(/[^\w\-]/g, '');
-			
+
 			if (sanitizedConversionAction !== conversionAction) {
 				executeFunctions.logger.warn('Conversion Action ID was sanitized:', {
 					original: conversionAction,
-					sanitized: sanitizedConversionAction
+					sanitized: sanitizedConversionAction,
 				});
 			}
-			
+
 			if (!sanitizedConversionAction) {
 				throw new GoogleAdsValidationError(
 					executeFunctions.getNode(),
@@ -1448,15 +1590,15 @@ export class GoogleAdsConversion implements INodeType {
 					'conversionAction'
 				);
 			}
-			
+
 			// Construct the fully qualified resource name
 			formattedConversionAction = `customers/${customerId}/conversionActions/${sanitizedConversionAction}`;
-			
+
 			if (debugMode) {
 				executeFunctions.logger.debug('Constructed conversion action resource name:', {
 					customerId,
 					sanitizedConversionAction,
-					formattedConversionAction
+					formattedConversionAction,
 				});
 			}
 		}
@@ -1494,7 +1636,10 @@ export class GoogleAdsConversion implements INodeType {
 			case 'gclid':
 				const gclid = executeFunctions.getNodeParameter('gclid', itemIndex) as string;
 				if (!gclid) {
-					throw new NodeOperationError(executeFunctions.getNode(), 'GCLID is required when using GCLID identification method');
+					throw new NodeOperationError(
+						executeFunctions.getNode(),
+						'GCLID is required when using GCLID identification method'
+					);
 				}
 				conversion.gclid = gclid;
 				break;
@@ -1502,7 +1647,10 @@ export class GoogleAdsConversion implements INodeType {
 			case 'gbraid':
 				const gbraid = executeFunctions.getNodeParameter('gbraid', itemIndex) as string;
 				if (!gbraid) {
-					throw new NodeOperationError(executeFunctions.getNode(), 'GBRAID is required when using GBRAID identification method');
+					throw new NodeOperationError(
+						executeFunctions.getNode(),
+						'GBRAID is required when using GBRAID identification method'
+					);
 				}
 				conversion.gbraid = gbraid;
 				break;
@@ -1510,7 +1658,10 @@ export class GoogleAdsConversion implements INodeType {
 			case 'wbraid':
 				const wbraid = executeFunctions.getNodeParameter('wbraid', itemIndex) as string;
 				if (!wbraid) {
-					throw new NodeOperationError(executeFunctions.getNode(), 'WBRAID is required when using WBRAID identification method');
+					throw new NodeOperationError(
+						executeFunctions.getNode(),
+						'WBRAID is required when using WBRAID identification method'
+					);
 				}
 				conversion.wbraid = wbraid;
 				break;
@@ -1518,13 +1669,19 @@ export class GoogleAdsConversion implements INodeType {
 			case 'enhanced':
 				const userIdentifiers = await this.buildUserIdentifiers(executeFunctions, itemIndex);
 				if (userIdentifiers.length === 0) {
-					throw new NodeOperationError(executeFunctions.getNode(), 'At least one user identifier (email, phone, or address info) is required for enhanced conversions');
+					throw new NodeOperationError(
+						executeFunctions.getNode(),
+						'At least one user identifier (email, phone, or address info) is required for enhanced conversions'
+					);
 				}
 				conversion.userIdentifiers = userIdentifiers;
 				break;
 
 			default:
-				throw new NodeOperationError(executeFunctions.getNode(), `Unsupported identification method: ${identificationMethod}`);
+				throw new NodeOperationError(
+					executeFunctions.getNode(),
+					`Unsupported identification method: ${identificationMethod}`
+				);
 		}
 
 		return conversion;
@@ -1537,13 +1694,13 @@ export class GoogleAdsConversion implements INodeType {
 		const credentials = await executeFunctions.getCredentials('googleAdsOAuth2');
 		const accountType = executeFunctions.getNodeParameter('accountType', 0, 'regular') as string;
 		const debugMode = executeFunctions.getNodeParameter('debugMode', 0, false) as boolean;
-		
+
 		let customerId: string;
-		
+
 		if (accountType === 'manager') {
 			// For manager accounts, use the selected managed account
 			const managedAccount = executeFunctions.getNodeParameter('managedAccount', 0) as any;
-			
+
 			if (typeof managedAccount === 'object' && managedAccount.value) {
 				customerId = managedAccount.value;
 			} else if (typeof managedAccount === 'string') {
@@ -1554,35 +1711,35 @@ export class GoogleAdsConversion implements INodeType {
 					'Managed account must be selected when using manager account type'
 				);
 			}
-			
+
 			if (debugMode) {
-				executeFunctions.logger.debug('Using managed account ID:', { 
+				executeFunctions.logger.debug('Using managed account ID:', {
 					managedAccountId: customerId,
-					managerAccountId: credentials.customerId 
+					managerAccountId: credentials.customerId,
 				});
 			}
 		} else {
 			// For regular accounts, use the credential's customer ID
 			customerId = credentials.customerId as string;
-			
+
 			if (debugMode) {
 				executeFunctions.logger.debug('Using regular account ID:', { customerId });
 			}
 		}
-		
+
 		// Validate customer ID exists
 		if (!customerId) {
 			throw new GoogleAdsAuthenticationError(
 				executeFunctions.getNode(),
-				accountType === 'manager' 
+				accountType === 'manager'
 					? 'Managed account ID is missing or not selected'
 					: 'Customer ID is missing in credentials'
 			);
 		}
-		
+
 		// Remove any non-digit characters to ensure valid format
 		const sanitizedCustomerId = customerId.replace(/\D/g, '');
-		
+
 		// Validate that we have digits after sanitization
 		if (!sanitizedCustomerId) {
 			throw new GoogleAdsAuthenticationError(
@@ -1590,7 +1747,7 @@ export class GoogleAdsConversion implements INodeType {
 				'Customer ID contains no valid digits'
 			);
 		}
-		
+
 		// Validate the length of the customer ID (Google Ads customer IDs are typically 10 digits)
 		if (sanitizedCustomerId.length < 8 || sanitizedCustomerId.length > 12) {
 			executeFunctions.logger.warn(
@@ -1598,22 +1755,30 @@ export class GoogleAdsConversion implements INodeType {
 				{ sanitizedCustomerId, length: sanitizedCustomerId.length }
 			);
 		}
-		
+
 		if (debugMode) {
-			executeFunctions.logger.debug('Final Customer ID for conversions:', { 
+			executeFunctions.logger.debug('Final Customer ID for conversions:', {
 				sanitizedCustomerId,
-				accountType 
+				accountType,
 			});
 		}
-		
+
 		return sanitizedCustomerId;
 	}
 
 	/**
 	 * Execute conversion upload to Google Ads API with retry logic
 	 */
-	private async uploadConversion(executeFunctions: IExecuteFunctions, conversion: any, itemIndex: number): Promise<any> {
-		const validateOnly = executeFunctions.getNodeParameter('validateOnly', itemIndex, false) as boolean;
+	private async uploadConversion(
+		executeFunctions: IExecuteFunctions,
+		conversion: any,
+		itemIndex: number
+	): Promise<any> {
+		const validateOnly = executeFunctions.getNodeParameter(
+			'validateOnly',
+			itemIndex,
+			false
+		) as boolean;
 		const debugMode = executeFunctions.getNodeParameter('debugMode', itemIndex, false) as boolean;
 
 		// Get and validate customer ID
@@ -1637,13 +1802,13 @@ export class GoogleAdsConversion implements INodeType {
 		if (debugMode) {
 			executeFunctions.logger.debug('Google Ads Conversion API Request Payload:', {
 				payload: requestPayload,
-				customerId
+				customerId,
 			});
 		}
 
 		// Construct and validate the URL
 		const baseUrl = 'https://googleads.googleapis.com/v17';
-		
+
 		// Validate customer ID format before constructing the URL
 		if (!customerId || !/^\d+$/.test(customerId)) {
 			throw new GoogleAdsApiError(
@@ -1653,18 +1818,30 @@ export class GoogleAdsConversion implements INodeType {
 				'ERR_INVALID_CUSTOMER_ID'
 			);
 		}
-		
+
 		const apiEndpoint = `/customers/${customerId}:uploadClickConversions`;
-		
+
 		// Log the URL components for debugging
 		if (debugMode) {
 			executeFunctions.logger.debug('URL Components:', {
 				baseUrl,
 				apiEndpoint,
-				fullUrl: new URL(apiEndpoint, baseUrl).href
+				fullUrl: new URL(apiEndpoint, baseUrl).href,
 			});
 		}
-		
+
+		console.log('Google Ads Upload URL Debug:', {
+			baseUrl,
+			apiEndpoint,
+			fullUrl: new URL(apiEndpoint, baseUrl).href,
+			customerId,
+			customerIdLength: customerId.length,
+			customerIdFormat: /^\d+$/.test(customerId)
+				? 'Valid (digits only)'
+				: 'Invalid (contains non-digits)',
+			itemIndex: itemIndex + 1,
+		});
+
 		// Validate URL before making the request
 		if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
 			throw new GoogleAdsApiError(
@@ -1728,10 +1905,14 @@ export class GoogleAdsConversion implements INodeType {
 		debugMode: boolean
 	): Promise<any> {
 		const customerId = await this.getCustomerId(executeFunctions);
-		const validateOnly = conversions.length > 0 && executeFunctions.getNodeParameter('validateOnly', 0, false) as boolean;
+		const validateOnly =
+			conversions.length > 0 &&
+			(executeFunctions.getNodeParameter('validateOnly', 0, false) as boolean);
 
 		if (showProgress && conversions.length > 0) {
-			executeFunctions.logger.info(`Processing batch ${batchIndex + 1}/${totalBatches} with ${conversions.length} conversions`);
+			executeFunctions.logger.info(
+				`Processing batch ${batchIndex + 1}/${totalBatches} with ${conversions.length} conversions`
+			);
 		}
 
 		// Build the batch request payload
@@ -1744,7 +1925,9 @@ export class GoogleAdsConversion implements INodeType {
 		};
 
 		if (debugMode) {
-			executeFunctions.logger.debug(`Batch ${batchIndex + 1} Request Payload:`, { payload: requestPayload });
+			executeFunctions.logger.debug(`Batch ${batchIndex + 1} Request Payload:`, {
+				payload: requestPayload,
+			});
 		}
 
 		return await this.executeWithRetry(
@@ -1759,20 +1942,34 @@ export class GoogleAdsConversion implements INodeType {
 						'ERR_INVALID_CUSTOMER_ID'
 					);
 				}
-				
+
 				// Construct the API endpoint
 				const apiEndpoint = `/customers/${customerId}:uploadClickConversions`;
 				const baseUrl = 'https://googleads.googleapis.com/v17';
-				
+
 				// Log the URL components for debugging
 				if (debugMode) {
 					executeFunctions.logger.debug('Batch URL Components:', {
 						baseUrl,
 						apiEndpoint,
-						fullUrl: new URL(apiEndpoint, baseUrl).href
+						fullUrl: new URL(apiEndpoint, baseUrl).href,
 					});
 				}
-				
+
+				console.log('Google Ads Batch Upload URL Debug:', {
+					baseUrl,
+					apiEndpoint,
+					fullUrl: new URL(apiEndpoint, baseUrl).href,
+					customerId,
+					customerIdLength: customerId.length,
+					customerIdFormat: /^\d+$/.test(customerId)
+						? 'Valid (digits only)'
+						: 'Invalid (contains non-digits)',
+					batchIndex: batchIndex + 1,
+					totalBatches,
+					conversionsCount: conversions.length,
+				});
+
 				// Validate URL before making the request
 				if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
 					throw new GoogleAdsApiError(
@@ -1782,7 +1979,7 @@ export class GoogleAdsConversion implements INodeType {
 						'ERR_INVALID_URL'
 					);
 				}
-				
+
 				// Make the batch API call
 				const response = await executeFunctions.helpers.httpRequestWithAuthentication.call(
 					executeFunctions,
@@ -1812,13 +2009,24 @@ export class GoogleAdsConversion implements INodeType {
 	/**
 	 * Process all items using batch processing
 	 */
-	private async processBatchItems(executeFunctions: IExecuteFunctions, items: INodeExecutionData[]): Promise<INodeExecutionData[]> {
-		const enableBatchProcessing = executeFunctions.getNodeParameter('enableBatchProcessing', 0, false) as boolean;
+	private async processBatchItems(
+		executeFunctions: IExecuteFunctions,
+		items: INodeExecutionData[]
+	): Promise<INodeExecutionData[]> {
+		const enableBatchProcessing = executeFunctions.getNodeParameter(
+			'enableBatchProcessing',
+			0,
+			false
+		) as boolean;
 		const batchSize = executeFunctions.getNodeParameter('batchSize', 0, 100) as number;
-		const batchProcessingMode = executeFunctions.getNodeParameter('batchProcessingMode', 0, 'partialFailure') as string;
+		const batchProcessingMode = executeFunctions.getNodeParameter(
+			'batchProcessingMode',
+			0,
+			'partialFailure'
+		) as string;
 		const showProgress = executeFunctions.getNodeParameter('showProgress', 0, true) as boolean;
 		const debugMode = executeFunctions.getNodeParameter('debugMode', 0, false) as boolean;
-		
+
 		const returnData: INodeExecutionData[] = [];
 
 		if (!enableBatchProcessing) {
@@ -1829,32 +2037,35 @@ export class GoogleAdsConversion implements INodeType {
 		// Validate batch size
 		const actualBatchSize = Math.min(Math.max(batchSize, 1), 2000);
 		if (actualBatchSize !== batchSize) {
-			executeFunctions.logger.warn(`Batch size adjusted from ${batchSize} to ${actualBatchSize} (must be between 1 and 2000)`);
+			executeFunctions.logger.warn(
+				`Batch size adjusted from ${batchSize} to ${actualBatchSize} (must be between 1 and 2000)`
+			);
 		}
 
 		if (showProgress) {
-			executeFunctions.logger.info(`Starting batch processing: ${items.length} items, batch size: ${actualBatchSize}`);
+			executeFunctions.logger.info(
+				`Starting batch processing: ${items.length} items, batch size: ${actualBatchSize}`
+			);
 		}
 
 		// Build all conversions first
 		const conversions: any[] = [];
 		const itemIndexMap: number[] = []; // Track which item each conversion came from
-		
+
 		for (let i = 0; i < items.length; i++) {
 			try {
 				// Validate input parameters
 				this.validateInputParameters(executeFunctions, i);
-				
+
 				// Build conversion payload from node parameters
 				const conversion = await this.buildConversionPayload(executeFunctions, i);
 				conversions.push(conversion);
 				itemIndexMap.push(i);
-				
 			} catch (error) {
 				if (batchProcessingMode === 'failFast') {
 					throw error;
 				}
-				
+
 				// Handle individual item errors in continue mode
 				returnData.push({
 					json: {
@@ -1880,7 +2091,9 @@ export class GoogleAdsConversion implements INodeType {
 		const batchIndexMaps = this.groupIntoBatches(itemIndexMap, actualBatchSize);
 
 		if (showProgress) {
-			executeFunctions.logger.info(`Created ${batches.length} batches from ${conversions.length} valid conversions`);
+			executeFunctions.logger.info(
+				`Created ${batches.length} batches from ${conversions.length} valid conversions`
+			);
 		}
 
 		// Process each batch
@@ -1888,7 +2101,7 @@ export class GoogleAdsConversion implements INodeType {
 			try {
 				const batch = batches[batchIndex];
 				const batchItemIndices = batchIndexMaps[batchIndex];
-				
+
 				// Process the batch
 				const batchResponse = await this.processBatch(
 					executeFunctions,
@@ -1911,7 +2124,6 @@ export class GoogleAdsConversion implements INodeType {
 				);
 
 				returnData.push(...batchResult);
-
 			} catch (error) {
 				if (batchProcessingMode === 'failFast') {
 					throw error;
@@ -1920,7 +2132,7 @@ export class GoogleAdsConversion implements INodeType {
 				// Handle batch errors in continue mode
 				const batch = batches[batchIndex];
 				const batchItemIndices = batchIndexMaps[batchIndex];
-				
+
 				for (let i = 0; i < batch.length; i++) {
 					const itemIndex = batchItemIndices[i];
 					returnData.push({
@@ -1936,15 +2148,19 @@ export class GoogleAdsConversion implements INodeType {
 				}
 
 				if (showProgress) {
-					executeFunctions.logger.error(`Batch ${batchIndex + 1} failed: ${(error as Error).message}`);
+					executeFunctions.logger.error(
+						`Batch ${batchIndex + 1} failed: ${(error as Error).message}`
+					);
 				}
 			}
 		}
 
 		if (showProgress) {
-			const successCount = returnData.filter(item => item.json.success).length;
-			const errorCount = returnData.filter(item => !item.json.success).length;
-			executeFunctions.logger.info(`Batch processing completed: ${successCount} successful, ${errorCount} failed`);
+			const successCount = returnData.filter((item) => item.json.success).length;
+			const errorCount = returnData.filter((item) => !item.json.success).length;
+			executeFunctions.logger.info(
+				`Batch processing completed: ${successCount} successful, ${errorCount} failed`
+			);
 		}
 
 		return returnData;
@@ -1962,28 +2178,37 @@ export class GoogleAdsConversion implements INodeType {
 		debugMode: boolean
 	): INodeExecutionData[] {
 		const results: INodeExecutionData[] = [];
-		
+
 		// Handle successful conversions
 		const results_array = batchResponse.results || [];
-		
+
 		for (let i = 0; i < batch.length; i++) {
 			const conversion = batch[i];
 			const itemIndex = batchItemIndices[i];
 			const originalItem = originalItems[itemIndex];
-			
+
 			// Check if this conversion had an error
-			const hasError = batchResponse.partialFailureError && 
-							 batchResponse.partialFailureError.details && 
-							 batchResponse.partialFailureError.details.some((detail: any) => 
-								 detail.errors && detail.errors.some((err: any) => err.location && err.location.fieldPathElements && 
-									 err.location.fieldPathElements.some((path: any) => path.index === i)
-								 )
-							 );
+			const hasError =
+				batchResponse.partialFailureError &&
+				batchResponse.partialFailureError.details &&
+				batchResponse.partialFailureError.details.some(
+					(detail: any) =>
+						detail.errors &&
+						detail.errors.some(
+							(err: any) =>
+								err.location &&
+								err.location.fieldPathElements &&
+								err.location.fieldPathElements.some((path: any) => path.index === i)
+						)
+				);
 
 			const result: any = {
 				success: !hasError,
-				message: hasError ? 'Conversion failed validation or processing' : 
-						(batch.length === 1 && results_array[0] ? 'Conversion uploaded successfully' : 'Conversion processed in batch'),
+				message: hasError
+					? 'Conversion failed validation or processing'
+					: batch.length === 1 && results_array[0]
+						? 'Conversion uploaded successfully'
+						: 'Conversion processed in batch',
 				operation: 'uploadClickConversion',
 				conversion: conversion,
 				itemIndex: itemIndex,
@@ -2018,7 +2243,10 @@ export class GoogleAdsConversion implements INodeType {
 	/**
 	 * Extract error information from partial failure response
 	 */
-	private extractErrorFromPartialFailure(partialFailureError: any, conversionIndex: number): string {
+	private extractErrorFromPartialFailure(
+		partialFailureError: any,
+		conversionIndex: number
+	): string {
 		if (!partialFailureError.details) {
 			return partialFailureError.message || 'Unknown batch error';
 		}
@@ -2028,7 +2256,9 @@ export class GoogleAdsConversion implements INodeType {
 
 			for (const error of detail.errors) {
 				if (error.location && error.location.fieldPathElements) {
-					const indexPath = error.location.fieldPathElements.find((path: any) => path.index === conversionIndex);
+					const indexPath = error.location.fieldPathElements.find(
+						(path: any) => path.index === conversionIndex
+					);
 					if (indexPath) {
 						return error.message || error.errorCode || 'Unknown conversion error';
 					}
@@ -2042,7 +2272,10 @@ export class GoogleAdsConversion implements INodeType {
 	/**
 	 * Process items individually (legacy mode)
 	 */
-	private async processIndividualItems(executeFunctions: IExecuteFunctions, items: INodeExecutionData[]): Promise<INodeExecutionData[]> {
+	private async processIndividualItems(
+		executeFunctions: IExecuteFunctions,
+		items: INodeExecutionData[]
+	): Promise<INodeExecutionData[]> {
 		const returnData: INodeExecutionData[] = [];
 
 		// Process each input item individually
@@ -2052,24 +2285,28 @@ export class GoogleAdsConversion implements INodeType {
 				const debugMode = executeFunctions.getNodeParameter('debugMode', i, false) as boolean;
 
 				if (debugMode) {
-					executeFunctions.logger.debug(`GoogleAdsConversion: Processing item ${i + 1}/${items.length}`);
+					executeFunctions.logger.debug(
+						`GoogleAdsConversion: Processing item ${i + 1}/${items.length}`
+					);
 					executeFunctions.logger.debug(`GoogleAdsConversion: Operation = ${operation}`);
 				}
 
 				if (operation === 'uploadClickConversion') {
 					// Validate input parameters first
 					this.validateInputParameters(executeFunctions, i);
-					
+
 					// Build conversion payload from node parameters
 					const conversion = await this.buildConversionPayload(executeFunctions, i);
-					
+
 					// Execute the conversion upload
 					const apiResponse = await this.uploadConversion(executeFunctions, conversion, i);
-					
+
 					// Process the response
 					const result: any = {
 						success: true,
-						message: executeFunctions.getNodeParameter('validateOnly', i, false) ? 'Conversion validation successful' : 'Conversion uploaded successfully',
+						message: executeFunctions.getNodeParameter('validateOnly', i, false)
+							? 'Conversion validation successful'
+							: 'Conversion uploaded successfully',
 						operation,
 						conversion,
 						response: apiResponse,
@@ -2086,22 +2323,24 @@ export class GoogleAdsConversion implements INodeType {
 					returnData.push({
 						json: result,
 					});
-
 				} else {
-					throw new GoogleAdsValidationError(executeFunctions.getNode(), `Operation "${operation}" is not supported`, 'operation');
+					throw new GoogleAdsValidationError(
+						executeFunctions.getNode(),
+						`Operation "${operation}" is not supported`,
+						'operation'
+					);
 				}
-
 			} catch (error) {
 				// Enhanced error handling with detailed diagnostics
 				const debugMode = executeFunctions.getNodeParameter('debugMode', i, false) as boolean;
 				const operation = executeFunctions.getNodeParameter('operation', i) as string;
-				
+
 				// Extract error details
 				const errorMessage = (error as Error).message;
 				const errorType = (error as any).name || 'Unknown';
 				const httpCode = (error as any).httpCode || 'Unknown';
 				const apiErrorCode = (error as any).apiErrorCode || 'Unknown';
-				
+
 				// Create detailed error object with diagnostics
 				const errorDetails: Record<string, any> = {
 					error: errorMessage,
@@ -2110,34 +2349,44 @@ export class GoogleAdsConversion implements INodeType {
 					apiErrorCode,
 					operation,
 				};
-				
+
 				// Add URL-specific diagnostics for URL errors
 				if (errorType === 'GoogleAdsApiError' && apiErrorCode === 'ERR_INVALID_URL') {
 					try {
 						// Get customer ID for diagnostics
 						const credentials = await executeFunctions.getCredentials('googleAdsOAuth2');
 						const customerId = credentials.customerId as string;
-						
+
 						errorDetails.urlDiagnostics = {
 							originalCustomerId: customerId,
 							sanitizedCustomerId: customerId ? customerId.replace(/\D/g, '') : null,
-							customerIdFormat: customerId ? (!/^\d+$/.test(customerId) ? 'Contains non-digit characters' : 'Valid format') : 'Missing',
+							customerIdFormat: customerId
+								? !/^\d+$/.test(customerId)
+									? 'Contains non-digit characters'
+									: 'Valid format'
+								: 'Missing',
 							attemptedUrl: `/customers/${customerId ? customerId.replace(/\D/g, '') : 'undefined'}:uploadClickConversions`,
 						};
-						
+
 						// Log detailed diagnostics for URL errors
-						executeFunctions.logger.error(`GoogleAdsConversion URL construction error for item ${i + 1}:`, errorDetails);
+						executeFunctions.logger.error(
+							`GoogleAdsConversion URL construction error for item ${i + 1}:`,
+							errorDetails
+						);
 					} catch (diagError) {
 						executeFunctions.logger.error(`Error while collecting URL diagnostics:`, {
 							originalError: errorMessage,
-							diagnosticError: (diagError as Error).message
+							diagnosticError: (diagError as Error).message,
 						});
 					}
 				} else {
 					// Log standard error details
-					executeFunctions.logger.error(`GoogleAdsConversion error for item ${i + 1}:`, errorDetails);
+					executeFunctions.logger.error(
+						`GoogleAdsConversion error for item ${i + 1}:`,
+						errorDetails
+					);
 				}
-				
+
 				if (executeFunctions.continueOnFail()) {
 					// Include detailed error information in the output
 					const errorOutput: Record<string, any> = {
@@ -2147,7 +2396,7 @@ export class GoogleAdsConversion implements INodeType {
 						operation,
 						itemIndex: i,
 					};
-					
+
 					// Add error details for better debugging
 					if (httpCode !== 'Unknown') {
 						errorOutput.errorDetails = { httpCode };
@@ -2155,18 +2404,21 @@ export class GoogleAdsConversion implements INodeType {
 							errorOutput.errorDetails.apiErrorCode = apiErrorCode;
 						}
 					}
-					
+
 					// Add URL diagnostics for URL errors
-					if (errorType === 'GoogleAdsApiError' && apiErrorCode === 'ERR_INVALID_URL' &&
-						errorDetails.urlDiagnostics) {
+					if (
+						errorType === 'GoogleAdsApiError' &&
+						apiErrorCode === 'ERR_INVALID_URL' &&
+						errorDetails.urlDiagnostics
+					) {
 						errorOutput.urlDiagnostics = errorDetails.urlDiagnostics;
 					}
-					
+
 					// Add full item data in debug mode
 					if (debugMode) {
 						errorOutput.item = items[i].json;
 					}
-					
+
 					returnData.push({ json: errorOutput });
 					continue;
 				}
@@ -2180,10 +2432,10 @@ export class GoogleAdsConversion implements INodeType {
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 		const items = this.getInputData();
 
-		// Process items using batch processing or individual processing  
+		// Process items using batch processing or individual processing
 		const googleAdsConversion = new GoogleAdsConversion();
 		const returnData = await googleAdsConversion.processBatchItems(this, items);
 
 		return [returnData];
 	}
-} 
+}

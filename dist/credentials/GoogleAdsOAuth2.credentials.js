@@ -113,18 +113,18 @@ class GoogleAdsOAuth2 {
             properties: {
                 headers: {
                     'developer-token': '={{$credentials.developerToken}}',
-                    'login-customer-id': '={{$credentials.customerId}}',
+                    'login-customer-id': '={{$credentials.customerId.replace(/\\D/g, "")}}',
                 },
             },
         };
         this.test = {
             request: {
-                baseURL: 'https://googleads.googleapis.com/v14',
-                url: '/customers/{{$credentials.customerId}}/googleAds:search',
+                baseURL: 'https://googleads.googleapis.com/v17',
+                url: '/customers/{{$credentials.customerId.replace(/\\D/g, "")}}/googleAds:search',
                 method: 'POST',
                 headers: {
                     'developer-token': '={{$credentials.developerToken}}',
-                    'login-customer-id': '={{$credentials.customerId}}',
+                    'login-customer-id': '={{$credentials.customerId.replace(/\\D/g, "")}}',
                 },
                 body: {
                     query: 'SELECT customer.id FROM customer LIMIT 1',

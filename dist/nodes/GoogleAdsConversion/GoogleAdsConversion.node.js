@@ -47,7 +47,7 @@ class GoogleAdsConversion {
             },
             // @ts-ignore - Compatibility with different n8n versions
             inputs: ['main'],
-            // @ts-ignore - Compatibility with different n8n versions  
+            // @ts-ignore - Compatibility with different n8n versions
             outputs: ['main'],
             credentials: [
                 {
@@ -58,7 +58,7 @@ class GoogleAdsConversion {
             requestDefaults: {
                 baseURL: 'https://googleads.googleapis.com/v17',
                 headers: {
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                     'Content-Type': 'application/json',
                 },
             },
@@ -670,7 +670,7 @@ class GoogleAdsConversion {
                             headers: {
                                 'developer-token': credentials.developerToken,
                                 'login-customer-id': credentials.customerId,
-                                'Accept': 'application/json',
+                                Accept: 'application/json',
                                 'Content-Type': 'application/json',
                             },
                         });
@@ -705,7 +705,7 @@ class GoogleAdsConversion {
      * Sleep utility for retry delays
      */
     async sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+        return new Promise((resolve) => setTimeout(resolve, ms));
     }
     /**
      * Retry configuration interface
@@ -742,7 +742,8 @@ class GoogleAdsConversion {
             return true;
         }
         // Don't retry authentication or validation errors
-        if (error instanceof GoogleAdsAuthenticationError || error instanceof GoogleAdsValidationError) {
+        if (error instanceof GoogleAdsAuthenticationError ||
+            error instanceof GoogleAdsValidationError) {
             return false;
         }
         // Retry server errors (5xx) but not client errors (4xx)
@@ -865,7 +866,9 @@ class GoogleAdsConversion {
                     detailedMessage = errorData.error.message || message;
                     // Handle specific Google Ads error types
                     if (errorData.error.details) {
-                        const details = Array.isArray(errorData.error.details) ? errorData.error.details : [errorData.error.details];
+                        const details = Array.isArray(errorData.error.details)
+                            ? errorData.error.details
+                            : [errorData.error.details];
                         const errorDetails = details.map((detail) => detail.message || detail).join('; ');
                         detailedMessage += ` Details: ${errorDetails}`;
                     }
@@ -887,8 +890,9 @@ class GoogleAdsConversion {
                 return new GoogleAdsValidationError(executeFunctions.getNode(), `Resource not found. ${detailedMessage}. Please check your conversion action ID and customer ID.`);
             case 429:
                 // Extract retry-after header if available
-                const retryAfter = error.response?.headers?.['retry-after'] ?
-                    parseInt(error.response.headers['retry-after']) : undefined;
+                const retryAfter = error.response?.headers?.['retry-after']
+                    ? parseInt(error.response.headers['retry-after'])
+                    : undefined;
                 return new GoogleAdsRateLimitError(executeFunctions.getNode(), `Rate limit exceeded. ${detailedMessage}. Please implement retry logic or reduce request frequency.`, retryAfter);
             case 500:
             case 502:
@@ -903,33 +907,86 @@ class GoogleAdsConversion {
      * Convert n8n DateTime objects or strings to ISO string format
      */
     convertDateTimeToString(dateTimeValue) {
-        if (!dateTimeValue) {
-            return '';
-        }
-        // Handle n8n DateTime objects
-        if (typeof dateTimeValue === 'object') {
-            // Check if it's a Date object
-            if (dateTimeValue instanceof Date) {
-                return dateTimeValue.toISOString();
+        try {
+            // If null or undefined, use current time
+            if (!dateTimeValue) {
+                return new Date().toISOString();
             }
-            // Check if it has a toString method (n8n DateTime objects)
-            if (dateTimeValue.toString && typeof dateTimeValue.toString === 'function') {
-                return dateTimeValue.toString();
+            // If it's already a string, validate and return
+            if (typeof dateTimeValue === 'string') {
+                // Basic validation: try to parse the string
+                const parsed = new Date(dateTimeValue);
+                if (!isNaN(parsed.getTime())) {
+                    return dateTimeValue;
+                }
+                // If string is invalid, fall back to current time
+                return new Date().toISOString();
             }
-            // Check if it has toISOString method
-            if (dateTimeValue.toISOString && typeof dateTimeValue.toISOString === 'function') {
-                return dateTimeValue.toISOString();
+            // If it's an array, use the first item
+            if (Array.isArray(dateTimeValue)) {
+                if (dateTimeValue.length > 0) {
+                    return this.convertDateTimeToString(dateTimeValue[0]);
+                }
+                // Empty array, use current time
+                return new Date().toISOString();
             }
+            // Handle n8n DateTime objects and other objects
+            if (typeof dateTimeValue === 'object') {
+                // Check if it's a Date object
+                if (dateTimeValue instanceof Date) {
+                    if (!isNaN(dateTimeValue.getTime())) {
+                        return dateTimeValue.toISOString();
+                    }
+                    // Invalid date object
+                    return new Date().toISOString();
+                }
+                // Check if it has a toString method (n8n DateTime objects)
+                if (dateTimeValue.toString && typeof dateTimeValue.toString === 'function') {
+                    const stringValue = dateTimeValue.toString();
+                    // Validate the string result
+                    const parsed = new Date(stringValue);
+                    if (!isNaN(parsed.getTime())) {
+                        return stringValue;
+                    }
+                }
+                // Check if it has toISOString method
+                if (dateTimeValue.toISOString && typeof dateTimeValue.toISOString === 'function') {
+                    try {
+                        return dateTimeValue.toISOString();
+                    }
+                    catch (error) {
+                        // toISOString failed, fall back
+                        return new Date().toISOString();
+                    }
+                }
+            }
+            // Handle numbers (timestamps)
+            if (typeof dateTimeValue === 'number') {
+                const dateFromNumber = new Date(dateTimeValue);
+                if (!isNaN(dateFromNumber.getTime())) {
+                    return dateFromNumber.toISOString();
+                }
+                // Invalid number, use current time
+                return new Date().toISOString();
+            }
+            // Fallback: try to convert to string and parse
+            try {
+                const stringValue = String(dateTimeValue);
+                const parsed = new Date(stringValue);
+                if (!isNaN(parsed.getTime())) {
+                    return stringValue;
+                }
+            }
+            catch (error) {
+                // String conversion failed
+            }
+            // Final fallback: current time
+            return new Date().toISOString();
         }
-        // Handle strings and numbers (timestamps)
-        if (typeof dateTimeValue === 'string') {
-            return dateTimeValue;
+        catch (error) {
+            // Any unexpected error, use current time
+            return new Date().toISOString();
         }
-        if (typeof dateTimeValue === 'number') {
-            return new Date(dateTimeValue).toISOString();
-        }
-        // Fallback: try to convert to string
-        return String(dateTimeValue);
     }
     /**
      * Validate input parameters before making API calls
@@ -974,8 +1031,7 @@ class GoogleAdsConversion {
                 const firstName = executeFunctions.getNodeParameter('firstName', itemIndex, '');
                 const lastName = executeFunctions.getNodeParameter('lastName', itemIndex, '');
                 const streetAddress = executeFunctions.getNodeParameter('streetAddress', itemIndex, '');
-                const hasUserData = [email, phoneNumber, firstName, lastName, streetAddress]
-                    .some(field => field && field.trim() !== '');
+                const hasUserData = [email, phoneNumber, firstName, lastName, streetAddress].some((field) => field && field.trim() !== '');
                 if (!hasUserData) {
                     throw new GoogleAdsValidationError(executeFunctions.getNode(), 'At least one user identifier (email, phone, or address info) is required for enhanced conversions', 'userIdentifiers');
                 }
@@ -1018,7 +1074,7 @@ class GoogleAdsConversion {
             return {
                 'developer-token': developerToken,
                 'login-customer-id': loginCustomerId.replace(/\D/g, ''), // Sanitize the login customer ID
-                'Accept': 'application/json',
+                Accept: 'application/json',
                 'Content-Type': 'application/json',
             };
         }
@@ -1091,12 +1147,16 @@ class GoogleAdsConversion {
             // Additional validation on the constructed URL
             if (!url.href || url.href === baseUrl + '/') {
                 executeFunctions.logger.error('URL construction resulted in invalid URL:', {
-                    baseUrl, path, constructedUrl: url.href
+                    baseUrl,
+                    path,
+                    constructedUrl: url.href,
                 });
                 return false;
             }
             executeFunctions.logger.debug('URL validation successful:', {
-                baseUrl, path, constructedUrl: url.href
+                baseUrl,
+                path,
+                constructedUrl: url.href,
             });
             return true;
         }
@@ -1104,7 +1164,7 @@ class GoogleAdsConversion {
             executeFunctions.logger.error('URL validation failed:', {
                 baseUrl,
                 path,
-                error: error.message
+                error: error.message,
             });
             return false;
         }
@@ -1205,7 +1265,9 @@ class GoogleAdsConversion {
             }
             formattedConversionAction = conversionAction;
             if (debugMode) {
-                executeFunctions.logger.debug('Using fully qualified conversion action resource name:', { formattedConversionAction });
+                executeFunctions.logger.debug('Using fully qualified conversion action resource name:', {
+                    formattedConversionAction,
+                });
             }
         }
         else {
@@ -1213,7 +1275,7 @@ class GoogleAdsConversion {
             if (!/^[\w\-]+$/.test(conversionAction)) {
                 executeFunctions.logger.warn('Conversion Action ID contains potentially invalid characters:', {
                     conversionAction,
-                    recommendation: 'Use only alphanumeric characters, underscores, and hyphens for conversion action IDs'
+                    recommendation: 'Use only alphanumeric characters, underscores, and hyphens for conversion action IDs',
                 });
             }
             // Remove any non-alphanumeric characters except for underscores and hyphens from the conversion action ID
@@ -1221,7 +1283,7 @@ class GoogleAdsConversion {
             if (sanitizedConversionAction !== conversionAction) {
                 executeFunctions.logger.warn('Conversion Action ID was sanitized:', {
                     original: conversionAction,
-                    sanitized: sanitizedConversionAction
+                    sanitized: sanitizedConversionAction,
                 });
             }
             if (!sanitizedConversionAction) {
@@ -1233,7 +1295,7 @@ class GoogleAdsConversion {
                 executeFunctions.logger.debug('Constructed conversion action resource name:', {
                     customerId,
                     sanitizedConversionAction,
-                    formattedConversionAction
+                    formattedConversionAction,
                 });
             }
         }
@@ -1319,7 +1381,7 @@ class GoogleAdsConversion {
             if (debugMode) {
                 executeFunctions.logger.debug('Using managed account ID:', {
                     managedAccountId: customerId,
-                    managerAccountId: credentials.customerId
+                    managerAccountId: credentials.customerId,
                 });
             }
         }
@@ -1349,7 +1411,7 @@ class GoogleAdsConversion {
         if (debugMode) {
             executeFunctions.logger.debug('Final Customer ID for conversions:', {
                 sanitizedCustomerId,
-                accountType
+                accountType,
             });
         }
         return sanitizedCustomerId;
@@ -1380,7 +1442,7 @@ class GoogleAdsConversion {
         if (debugMode) {
             executeFunctions.logger.debug('Google Ads Conversion API Request Payload:', {
                 payload: requestPayload,
-                customerId
+                customerId,
             });
         }
         // Construct and validate the URL
@@ -1395,9 +1457,20 @@ class GoogleAdsConversion {
             executeFunctions.logger.debug('URL Components:', {
                 baseUrl,
                 apiEndpoint,
-                fullUrl: new URL(apiEndpoint, baseUrl).href
+                fullUrl: new URL(apiEndpoint, baseUrl).href,
             });
         }
+        console.log('Google Ads Upload URL Debug:', {
+            baseUrl,
+            apiEndpoint,
+            fullUrl: new URL(apiEndpoint, baseUrl).href,
+            customerId,
+            customerIdLength: customerId.length,
+            customerIdFormat: /^\d+$/.test(customerId)
+                ? 'Valid (digits only)'
+                : 'Invalid (contains non-digits)',
+            itemIndex: itemIndex + 1,
+        });
         // Validate URL before making the request
         if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
             throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid URL constructed for conversion upload. Base URL: ${baseUrl}, Path: ${apiEndpoint}. Please check your customer ID format.`, 400, 'ERR_INVALID_URL');
@@ -1434,7 +1507,8 @@ class GoogleAdsConversion {
      */
     async processBatch(executeFunctions, conversions, batchIndex, totalBatches, batchProcessingMode, showProgress, debugMode) {
         const customerId = await this.getCustomerId(executeFunctions);
-        const validateOnly = conversions.length > 0 && executeFunctions.getNodeParameter('validateOnly', 0, false);
+        const validateOnly = conversions.length > 0 &&
+            executeFunctions.getNodeParameter('validateOnly', 0, false);
         if (showProgress && conversions.length > 0) {
             executeFunctions.logger.info(`Processing batch ${batchIndex + 1}/${totalBatches} with ${conversions.length} conversions`);
         }
@@ -1447,7 +1521,9 @@ class GoogleAdsConversion {
             validateOnly: validateOnly,
         };
         if (debugMode) {
-            executeFunctions.logger.debug(`Batch ${batchIndex + 1} Request Payload:`, { payload: requestPayload });
+            executeFunctions.logger.debug(`Batch ${batchIndex + 1} Request Payload:`, {
+                payload: requestPayload,
+            });
         }
         return await this.executeWithRetry(executeFunctions, async () => {
             // Validate customer ID format before constructing the URL
@@ -1462,9 +1538,22 @@ class GoogleAdsConversion {
                 executeFunctions.logger.debug('Batch URL Components:', {
                     baseUrl,
                     apiEndpoint,
-                    fullUrl: new URL(apiEndpoint, baseUrl).href
+                    fullUrl: new URL(apiEndpoint, baseUrl).href,
                 });
             }
+            console.log('Google Ads Batch Upload URL Debug:', {
+                baseUrl,
+                apiEndpoint,
+                fullUrl: new URL(apiEndpoint, baseUrl).href,
+                customerId,
+                customerIdLength: customerId.length,
+                customerIdFormat: /^\d+$/.test(customerId)
+                    ? 'Valid (digits only)'
+                    : 'Invalid (contains non-digits)',
+                batchIndex: batchIndex + 1,
+                totalBatches,
+                conversionsCount: conversions.length,
+            });
             // Validate URL before making the request
             if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
                 throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid URL constructed for batch conversion upload. Base URL: ${baseUrl}, Path: ${apiEndpoint}. Please check your customer ID format.`, 400, 'ERR_INVALID_URL');
@@ -1584,8 +1673,8 @@ class GoogleAdsConversion {
             }
         }
         if (showProgress) {
-            const successCount = returnData.filter(item => item.json.success).length;
-            const errorCount = returnData.filter(item => !item.json.success).length;
+            const successCount = returnData.filter((item) => item.json.success).length;
+            const errorCount = returnData.filter((item) => !item.json.success).length;
             executeFunctions.logger.info(`Batch processing completed: ${successCount} successful, ${errorCount} failed`);
         }
         return returnData;
@@ -1604,12 +1693,17 @@ class GoogleAdsConversion {
             // Check if this conversion had an error
             const hasError = batchResponse.partialFailureError &&
                 batchResponse.partialFailureError.details &&
-                batchResponse.partialFailureError.details.some((detail) => detail.errors && detail.errors.some((err) => err.location && err.location.fieldPathElements &&
-                    err.location.fieldPathElements.some((path) => path.index === i)));
+                batchResponse.partialFailureError.details.some((detail) => detail.errors &&
+                    detail.errors.some((err) => err.location &&
+                        err.location.fieldPathElements &&
+                        err.location.fieldPathElements.some((path) => path.index === i)));
             const result = {
                 success: !hasError,
-                message: hasError ? 'Conversion failed validation or processing' :
-                    (batch.length === 1 && results_array[0] ? 'Conversion uploaded successfully' : 'Conversion processed in batch'),
+                message: hasError
+                    ? 'Conversion failed validation or processing'
+                    : batch.length === 1 && results_array[0]
+                        ? 'Conversion uploaded successfully'
+                        : 'Conversion processed in batch',
                 operation: 'uploadClickConversion',
                 conversion: conversion,
                 itemIndex: itemIndex,
@@ -1680,7 +1774,9 @@ class GoogleAdsConversion {
                     // Process the response
                     const result = {
                         success: true,
-                        message: executeFunctions.getNodeParameter('validateOnly', i, false) ? 'Conversion validation successful' : 'Conversion uploaded successfully',
+                        message: executeFunctions.getNodeParameter('validateOnly', i, false)
+                            ? 'Conversion validation successful'
+                            : 'Conversion uploaded successfully',
                         operation,
                         conversion,
                         response: apiResponse,
@@ -1726,7 +1822,11 @@ class GoogleAdsConversion {
                         errorDetails.urlDiagnostics = {
                             originalCustomerId: customerId,
                             sanitizedCustomerId: customerId ? customerId.replace(/\D/g, '') : null,
-                            customerIdFormat: customerId ? (!/^\d+$/.test(customerId) ? 'Contains non-digit characters' : 'Valid format') : 'Missing',
+                            customerIdFormat: customerId
+                                ? !/^\d+$/.test(customerId)
+                                    ? 'Contains non-digit characters'
+                                    : 'Valid format'
+                                : 'Missing',
                             attemptedUrl: `/customers/${customerId ? customerId.replace(/\D/g, '') : 'undefined'}:uploadClickConversions`,
                         };
                         // Log detailed diagnostics for URL errors
@@ -1735,7 +1835,7 @@ class GoogleAdsConversion {
                     catch (diagError) {
                         executeFunctions.logger.error(`Error while collecting URL diagnostics:`, {
                             originalError: errorMessage,
-                            diagnosticError: diagError.message
+                            diagnosticError: diagError.message,
                         });
                     }
                 }
@@ -1760,7 +1860,8 @@ class GoogleAdsConversion {
                         }
                     }
                     // Add URL diagnostics for URL errors
-                    if (errorType === 'GoogleAdsApiError' && apiErrorCode === 'ERR_INVALID_URL' &&
+                    if (errorType === 'GoogleAdsApiError' &&
+                        apiErrorCode === 'ERR_INVALID_URL' &&
                         errorDetails.urlDiagnostics) {
                         errorOutput.urlDiagnostics = errorDetails.urlDiagnostics;
                     }
@@ -1778,7 +1879,7 @@ class GoogleAdsConversion {
     }
     async execute() {
         const items = this.getInputData();
-        // Process items using batch processing or individual processing  
+        // Process items using batch processing or individual processing
         const googleAdsConversion = new GoogleAdsConversion();
         const returnData = await googleAdsConversion.processBatchItems(this, items);
         return [returnData];

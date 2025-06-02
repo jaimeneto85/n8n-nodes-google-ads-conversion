@@ -11,7 +11,7 @@ export class GoogleAdsOAuth2 implements ICredentialType {
 	displayName = 'Google Ads OAuth2';
 	documentationUrl = 'https://developers.google.com/google-ads/api/docs/oauth/overview';
 	icon = 'file:googleAds.svg' as const;
-	
+
 	properties: INodeProperties[] = [
 		{
 			displayName: 'Grant Type',
@@ -63,7 +63,8 @@ export class GoogleAdsOAuth2 implements ICredentialType {
 				{
 					name: 'Full Management Access',
 					value: 'full',
-					description: 'Complete access to Google Ads API including campaign management (requires additional approval)',
+					description:
+						'Complete access to Google Ads API including campaign management (requires additional approval)',
 				},
 			],
 			default: 'standard',
@@ -118,23 +119,23 @@ export class GoogleAdsOAuth2 implements ICredentialType {
 		properties: {
 			headers: {
 				'developer-token': '={{$credentials.developerToken}}',
-				'login-customer-id': '={{$credentials.customerId}}',
+				'login-customer-id': '={{$credentials.customerId.replace(/\\D/g, "")}}',
 			},
 		},
 	};
 
 	test: ICredentialTestRequest = {
 		request: {
-			baseURL: 'https://googleads.googleapis.com/v14',
-			url: '/customers/{{$credentials.customerId}}/googleAds:search',
+			baseURL: 'https://googleads.googleapis.com/v17',
+			url: '/customers/{{$credentials.customerId.replace(/\\D/g, "")}}/googleAds:search',
 			method: 'POST',
 			headers: {
 				'developer-token': '={{$credentials.developerToken}}',
-				'login-customer-id': '={{$credentials.customerId}}',
+				'login-customer-id': '={{$credentials.customerId.replace(/\\D/g, "")}}',
 			},
 			body: {
 				query: 'SELECT customer.id FROM customer LIMIT 1',
 			},
 		},
 	};
-} 
+}
