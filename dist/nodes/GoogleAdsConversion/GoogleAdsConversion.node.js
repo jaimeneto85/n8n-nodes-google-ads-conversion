@@ -1213,8 +1213,18 @@ class GoogleAdsConversion {
                 executeFunctions.logger.error('Invalid customer ID in path:', { path });
                 return false;
             }
-            // Attempt to construct a URL object to validate
-            const url = new URL(path, baseUrl);
+            // Construct the full URL properly
+            let fullUrl;
+            if (path.startsWith('/')) {
+                // Remove trailing slash from baseUrl if present, then append path
+                const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+                fullUrl = cleanBaseUrl + path;
+            }
+            else {
+                fullUrl = `${baseUrl}/${path}`;
+            }
+            // Validate the constructed URL
+            const url = new URL(fullUrl);
             // Additional validation on the constructed URL
             if (!url.href || url.href === baseUrl + '/') {
                 executeFunctions.logger.error('URL construction resulted in invalid URL:', {
@@ -1516,25 +1526,26 @@ class GoogleAdsConversion {
                 customerId,
             });
         }
-        // Construct and validate the URL
-        const baseUrl = 'https://googleads.googleapis.com/v17';
         // Validate customer ID format before constructing the URL
         if (!customerId || !/^\d+$/.test(customerId)) {
             throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid customer ID format: ${customerId}. Must contain only digits.`, 400, 'ERR_INVALID_CUSTOMER_ID');
         }
-        const apiEndpoint = `/customers/${customerId}:uploadClickConversions`;
+        // Construct the full URL properly
+        const baseUrl = 'https://googleads.googleapis.com/v17';
+        const apiPath = `/customers/${customerId}:uploadClickConversions`;
+        const fullUrl = baseUrl + apiPath;
         // Log the URL components for debugging
         if (debugMode) {
             executeFunctions.logger.debug('URL Components:', {
                 baseUrl,
-                apiEndpoint,
-                fullUrl: new URL(apiEndpoint, baseUrl).href,
+                apiPath,
+                fullUrl,
             });
         }
         console.log('Google Ads Upload URL Debug:', {
             baseUrl,
-            apiEndpoint,
-            fullUrl: new URL(apiEndpoint, baseUrl).href,
+            apiPath,
+            fullUrl,
             customerId,
             customerIdLength: customerId.length,
             customerIdFormat: /^\d+$/.test(customerId)
@@ -1543,19 +1554,18 @@ class GoogleAdsConversion {
             itemIndex: itemIndex + 1,
         });
         // Validate URL before making the request
-        if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
-            throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid URL constructed for conversion upload. Base URL: ${baseUrl}, Path: ${apiEndpoint}. Please check your customer ID format.`, 400, 'ERR_INVALID_URL');
+        if (!this.validateUrl(baseUrl, apiPath, executeFunctions)) {
+            throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid URL constructed for conversion upload. Base URL: ${baseUrl}, Path: ${apiPath}. Please check your customer ID format.`, 400, 'ERR_INVALID_URL');
         }
         return await this.executeWithRetry(executeFunctions, async () => {
-            // Make the API call
+            // Make the API call using the full URL
             const response = await executeFunctions.helpers.httpRequestWithAuthentication.call(executeFunctions, 'googleAdsOAuth2', {
                 method: 'POST',
-                url: apiEndpoint,
+                url: fullUrl,
                 body: requestPayload,
                 headers: await this.getAuthenticatedHeaders(executeFunctions),
-                // Add timeout and error handling options
-                timeout: 30000, // 30 seconds timeout
-                ignoreHttpStatusErrors: false, // Don't ignore HTTP errors
+                timeout: 30000,
+                ignoreHttpStatusErrors: false,
             });
             if (debugMode) {
                 executeFunctions.logger.debug('Google Ads Conversion API Response:', { response });
@@ -1596,48 +1606,48 @@ class GoogleAdsConversion {
                 payload: requestPayload,
             });
         }
-        return await this.executeWithRetry(executeFunctions, async () => {
-            // Validate customer ID format before constructing the URL
-            if (!customerId || !/^\d+$/.test(customerId)) {
-                throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid customer ID format: ${customerId}. Must contain only digits.`, 400, 'ERR_INVALID_CUSTOMER_ID');
-            }
-            // Construct the API endpoint
-            const apiEndpoint = `/customers/${customerId}:uploadClickConversions`;
-            const baseUrl = 'https://googleads.googleapis.com/v17';
-            // Log the URL components for debugging
-            if (debugMode) {
-                executeFunctions.logger.debug('Batch URL Components:', {
-                    baseUrl,
-                    apiEndpoint,
-                    fullUrl: new URL(apiEndpoint, baseUrl).href,
-                });
-            }
-            console.log('Google Ads Batch Upload URL Debug:', {
+        // Validate customer ID format before constructing the URL
+        if (!customerId || !/^\d+$/.test(customerId)) {
+            throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid customer ID format: ${customerId}. Must contain only digits.`, 400, 'ERR_INVALID_CUSTOMER_ID');
+        }
+        // Construct the full URL properly
+        const baseUrl = 'https://googleads.googleapis.com/v17';
+        const apiPath = `/customers/${customerId}:uploadClickConversions`;
+        const fullUrl = baseUrl + apiPath;
+        // Log the URL components for debugging
+        if (debugMode) {
+            executeFunctions.logger.debug('Batch URL Components:', {
                 baseUrl,
-                apiEndpoint,
-                fullUrl: new URL(apiEndpoint, baseUrl).href,
-                customerId,
-                customerIdLength: customerId.length,
-                customerIdFormat: /^\d+$/.test(customerId)
-                    ? 'Valid (digits only)'
-                    : 'Invalid (contains non-digits)',
-                batchIndex: batchIndex + 1,
-                totalBatches,
-                conversionsCount: conversions.length,
+                apiPath,
+                fullUrl,
             });
-            // Validate URL before making the request
-            if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
-                throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid URL constructed for batch conversion upload. Base URL: ${baseUrl}, Path: ${apiEndpoint}. Please check your customer ID format.`, 400, 'ERR_INVALID_URL');
-            }
-            // Make the batch API call
+        }
+        console.log('Google Ads Batch Upload URL Debug:', {
+            baseUrl,
+            apiPath,
+            fullUrl,
+            customerId,
+            customerIdLength: customerId.length,
+            customerIdFormat: /^\d+$/.test(customerId)
+                ? 'Valid (digits only)'
+                : 'Invalid (contains non-digits)',
+            batchIndex: batchIndex + 1,
+            totalBatches,
+            conversionsCount: conversions.length,
+        });
+        // Validate URL before making the request
+        if (!this.validateUrl(baseUrl, apiPath, executeFunctions)) {
+            throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid URL constructed for batch upload. Base URL: ${baseUrl}, Path: ${apiPath}. Please check your customer ID format.`, 400, 'ERR_INVALID_URL');
+        }
+        return await this.executeWithRetry(executeFunctions, async () => {
+            // Make the batch API call using the full URL
             const response = await executeFunctions.helpers.httpRequestWithAuthentication.call(executeFunctions, 'googleAdsOAuth2', {
                 method: 'POST',
-                url: apiEndpoint,
+                url: fullUrl,
                 body: requestPayload,
                 headers: await this.getAuthenticatedHeaders(executeFunctions),
-                // Add timeout and error handling options
-                timeout: 30000, // 30 seconds timeout
-                ignoreHttpStatusErrors: false, // Don't ignore HTTP errors
+                timeout: 30000,
+                ignoreHttpStatusErrors: false,
             });
             if (debugMode) {
                 executeFunctions.logger.debug(`Batch ${batchIndex + 1} Response:`, { response });
