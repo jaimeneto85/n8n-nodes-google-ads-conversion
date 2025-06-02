@@ -673,21 +673,42 @@ export class GoogleAdsConversion implements INodeType {
 		listSearch: {
 			async getManagedAccounts(this: ILoadOptionsFunctions): Promise<INodeListSearchResult> {
 				try {
+					console.log('getManagedAccounts: Starting request...');
+
 					// Get credentials and developer token from authentication
 					const credentials = await this.getCredentials('googleAdsOAuth2');
 
 					if (!credentials) {
+						console.error('getManagedAccounts: No credentials found');
 						throw new Error('No credentials provided for Google Ads OAuth2');
 					}
 
 					const managerCustomerId = credentials.customerId as string;
 					const developerToken = credentials.developerToken as string;
 
+					console.log('getManagedAccounts: Credentials check:', {
+						hasCustomerId: !!managerCustomerId,
+						hasDeveloperToken: !!developerToken,
+						customerIdLength: managerCustomerId?.length || 0,
+					});
+
 					if (!managerCustomerId) {
+						console.error('getManagedAccounts: Manager customer ID is missing');
 						throw new Error('Manager customer ID is required');
 					}
 
+					if (!developerToken) {
+						console.error('getManagedAccounts: Developer token is missing');
+						throw new Error('Developer token is required');
+					}
+
 					const sanitizedManagerId = managerCustomerId.replace(/\D/g, '');
+
+					if (!sanitizedManagerId) {
+						console.error('getManagedAccounts: Customer ID has no valid digits');
+						throw new Error('Customer ID must contain at least one digit');
+					}
+
 					const apiUrl = `/customers/${sanitizedManagerId}/googleAds:search`;
 					const baseUrl = 'https://googleads.googleapis.com/v17';
 
@@ -767,18 +788,16 @@ export class GoogleAdsConversion implements INodeType {
 						error: error.message,
 						httpCode: error.httpCode || error.status,
 						responseBody: error.response?.body || error.body,
+						requestConfig: error.config || error.request,
 						stack: error.stack,
-						credentials: {
-							hasCustomerId: !!(await this.getCredentials('googleAdsOAuth2'))?.customerId,
-							hasDeveloperToken: !!(await this.getCredentials('googleAdsOAuth2'))?.developerToken,
-						},
+						fullError: error,
 					});
-					throw new GoogleAdsApiError(
-						this.getNode(),
-						`Failed to load managed accounts: ${error.message}`,
-						error.httpCode || 500,
-						error.code
-					);
+
+					// Rethrow com informações mais específicas
+					const errorMessage = error.message || 'Unknown error occurred';
+					const httpCode = error.httpCode || error.status || 500;
+
+					throw new Error(`Failed to load managed accounts: ${errorMessage} (HTTP ${httpCode})`);
 				}
 			},
 		},
