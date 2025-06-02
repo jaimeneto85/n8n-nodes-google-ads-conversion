@@ -5,7 +5,31 @@ All notable changes to the Google Ads Conversion Node project will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.0] - 2025-05-30
+## [0.8.1] - 2024-06-02
+### Fixed
+- Fixed 403 Forbidden errors by improving login-customer-id handling and validation
+- Added validation checks for sanitized customer IDs to ensure proper authentication
+- Enhanced error logging for authentication issues
+
+## [0.8.0] - 2024-06-01
+### Added
+- Initial support for Google Ads API v17
+- Enhanced error handling for API errors
+- Added detailed logging for troubleshooting
+
+## [0.7.7] - 2024-05-28
+### Fixed
+- Fixed 403 error issues
+
+## [0.7.6] - 2024-05-27
+### Fixed
+- Fixed Google Ads API payload structure
+- Removed partialFailurePolicy from JSON payload (not supported by API)
+- Used partial_failure as query parameter instead
+- Updated URL construction to include query parameters
+- Resolved 400 error related to unknown field partialFailurePolicy
+
+## [0.5.0] - 2024-05-30
 
 ### Added
 

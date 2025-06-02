@@ -1475,12 +1475,25 @@ export class GoogleAdsConversion implements INodeType {
 			// For manager accounts, use the manager account ID as login-customer-id
 			// For regular accounts, use the same customer ID for both
 			const accountType = executeFunctions.getNodeParameter('accountType', 0, 'regular') as string;
+			
+			// IMPORTANT: Always include login-customer-id even for regular accounts
+			// This helps with proper authentication for both regular and manager accounts
 			const loginCustomerId = credentialCustomerId; // Always use the authenticated account ID as login customer
+			
+			const sanitizedLoginCustomerId = loginCustomerId.replace(/\D/g, '');
+			
+			// If login customer ID is missing or invalid after sanitization, log a warning
+			if (!sanitizedLoginCustomerId) {
+				executeFunctions.logger.warn(
+					'Invalid login-customer-id after sanitization. This will likely cause authentication issues.',
+					{ originalValue: loginCustomerId }
+				);
+			}
 
 			// Return headers required for Google Ads API authentication
 			return {
 				'developer-token': developerToken,
-				'login-customer-id': loginCustomerId.replace(/\D/g, ''), // Sanitize the login customer ID
+				'login-customer-id': sanitizedLoginCustomerId, // Sanitized login customer ID
 				Accept: 'application/json',
 				'Content-Type': 'application/json',
 			};
