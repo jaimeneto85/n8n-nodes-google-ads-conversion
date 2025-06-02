@@ -103,4 +103,8 @@ export declare class GoogleAdsConversion implements INodeType {
      * Diagnose permission issues for 403 errors
      */
     private diagnosePermissionIssues;
+    /**
+     * Test if conversion action exists and is accessible
+     */
+    private testConversionAction;
 }

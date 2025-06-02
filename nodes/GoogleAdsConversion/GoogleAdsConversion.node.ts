@@ -1422,6 +1422,13 @@ export class GoogleAdsConversion implements INodeType {
 						'userIdentifiers'
 					);
 				}
+
+				// Warning about Enhanced Conversions requirements
+				if (phoneNumber && !email && !firstName && !lastName) {
+					executeFunctions.logger.warn(
+						'Using only phone number for Enhanced Conversions. For better match rates, consider adding email or name fields. Enhanced Conversions work best when combined with GCLID or when multiple user identifiers are provided.'
+					);
+				}
 				break;
 
 			default:
@@ -1437,6 +1444,24 @@ export class GoogleAdsConversion implements INodeType {
 			const date = new Date(conversionDateTime);
 			if (isNaN(date.getTime())) {
 				throw new Error('Invalid date');
+			}
+
+			// Check if date is in the future (Google Ads doesn't accept future conversions)
+			const now = new Date();
+			if (date > now) {
+				throw new GoogleAdsValidationError(
+					executeFunctions.getNode(),
+					`Conversion date time cannot be in the future. Provided: ${conversionDateTime}, Current time: ${now.toISOString()}. Google Ads only accepts past conversion events.`,
+					'conversionDateTime'
+				);
+			}
+
+			// Check if date is too old (Google Ads has limits, typically 90 days)
+			const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+			if (date < ninetyDaysAgo) {
+				executeFunctions.logger.warn(
+					`Conversion date is older than 90 days (${conversionDateTime}). This may be rejected by Google Ads.`
+				);
 			}
 		} catch (dateError) {
 			throw new GoogleAdsValidationError(
@@ -1554,7 +1579,7 @@ export class GoogleAdsConversion implements INodeType {
 					query: 'SELECT customer.id FROM customer LIMIT 1',
 				};
 
-				return await executeFunctions.helpers.httpRequestWithAuthentication.call(
+				const response = await executeFunctions.helpers.httpRequestWithAuthentication.call(
 					executeFunctions,
 					'googleAdsOAuth2',
 					{
@@ -1567,6 +1592,35 @@ export class GoogleAdsConversion implements INodeType {
 						ignoreHttpStatusErrors: false, // Don't ignore HTTP errors
 					}
 				);
+
+				// Test conversion action if provided
+				const conversionAction = executeFunctions.getNodeParameter(
+					'conversionAction',
+					0,
+					''
+				) as string;
+				if (conversionAction && debugMode) {
+					// Extract conversion action ID from resource name or use as-is
+					let conversionActionId = conversionAction;
+					if (conversionAction.includes('/conversionActions/')) {
+						conversionActionId = conversionAction.split('/conversionActions/')[1];
+					}
+
+					if (conversionActionId) {
+						const isValidAction = await this.testConversionAction(
+							executeFunctions,
+							customerId,
+							conversionActionId
+						);
+						if (!isValidAction) {
+							executeFunctions.logger.warn(
+								`Conversion Action ${conversionActionId} may not be accessible or active. This could cause upload failures.`
+							);
+						}
+					}
+				}
+
+				return response;
 			},
 			'Credential Validation',
 			debugMode
@@ -2861,5 +2915,65 @@ export class GoogleAdsConversion implements INodeType {
 		}
 
 		return issues;
+	}
+
+	/**
+	 * Test if conversion action exists and is accessible
+	 */
+	private async testConversionAction(
+		executeFunctions: IExecuteFunctions,
+		customerId: string,
+		conversionActionId: string
+	): Promise<boolean> {
+		try {
+			const headers = await this.getAuthenticatedHeaders(executeFunctions);
+			const testUrl = `https://googleads.googleapis.com/v17/customers/${customerId}/googleAds:search`;
+
+			const testPayload = {
+				query: `SELECT conversion_action.id, conversion_action.name, conversion_action.status, conversion_action.type FROM conversion_action WHERE conversion_action.id = ${conversionActionId}`,
+			};
+
+			const response = await executeFunctions.helpers.httpRequestWithAuthentication.call(
+				executeFunctions,
+				'googleAdsOAuth2',
+				{
+					method: 'POST',
+					url: testUrl,
+					body: testPayload,
+					headers: headers,
+					timeout: 10000,
+				}
+			);
+
+			if (response.results && response.results.length > 0) {
+				const conversionAction = response.results[0].conversionAction;
+				console.log('Conversion Action Test Result:', {
+					id: conversionAction.id,
+					name: conversionAction.name,
+					status: conversionAction.status,
+					type: conversionAction.type,
+				});
+
+				if (conversionAction.status !== 'ENABLED') {
+					console.warn(
+						`Conversion Action ${conversionActionId} status is: ${conversionAction.status}. It should be ENABLED.`
+					);
+					return false;
+				}
+				return true;
+			} else {
+				console.error(
+					`Conversion Action ${conversionActionId} not found in customer ${customerId}`
+				);
+				return false;
+			}
+		} catch (error: any) {
+			console.error('Conversion Action test failed:', {
+				conversionActionId,
+				customerId,
+				error: error.message,
+			});
+			return false;
+		}
 	}
 }
