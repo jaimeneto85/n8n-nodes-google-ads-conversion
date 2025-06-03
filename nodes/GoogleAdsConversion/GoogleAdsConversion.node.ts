@@ -907,298 +907,222 @@ export class GoogleAdsConversion implements INodeType {
 			try {
 				if (debugMode && attempt > 0) {
 					executeFunctions.logger.debug(
-						`${context}: Retry attempt ${attempt}/${config.maxRetries}`
+						`${context} - Retry attempt ${attempt}/${config.maxRetries}`
 					);
 				}
 
-				const result = await operation();
-
-				if (debugMode && attempt > 0) {
-					executeFunctions.logger.debug(`${context}: Retry successful on attempt ${attempt}`);
-				}
-
-				return result;
-			} catch (error) {
+				return await operation();
+			} catch (error: any) {
 				lastError = error;
+				const httpCode = error.httpCode || error.status || 0;
 
-				// Parse the error using our error handling system
-				const parsedError = this.parseApiError(error, executeFunctions);
-
-				// Check if we should retry this error
-				if (!this.shouldRetry(error, attempt, config)) {
-					if (debugMode) {
-						executeFunctions.logger.debug(`${context}: Error not retryable`, {
-							error: parsedError.message,
-							errorType: parsedError.name,
-							attempt,
-							httpCode: error.httpCode || error.status,
-						});
-					}
-					throw parsedError;
-				}
-
-				// If this is our last attempt, throw the error
-				if (attempt === config.maxRetries) {
-					if (debugMode) {
-						executeFunctions.logger.debug(`${context}: Max retries exceeded`, {
-							error: parsedError.message,
-							errorType: parsedError.name,
-							maxRetries: config.maxRetries,
-						});
-					}
-					throw parsedError;
-				}
-
-				// Calculate delay for next attempt
-				const retryAfter = (parsedError as any).retryAfter;
-				const delay = this.calculateDelay(attempt, config, retryAfter);
-
+				// Log the error for debugging
 				if (debugMode) {
-					executeFunctions.logger.debug(`${context}: Retrying after delay`, {
-						error: parsedError.message,
-						errorType: parsedError.name,
+					executeFunctions.logger.debug(`${context} - Error on attempt ${attempt + 1}:`, {
+						httpCode,
+						message: error.message,
 						attempt: attempt + 1,
 						maxRetries: config.maxRetries,
-						delayMs: delay,
-						retryAfter: retryAfter,
 					});
 				}
 
-				// Wait before retrying
-				await this.sleep(delay);
+				// For 403 errors, run diagnostics on first attempt
+				if (httpCode === 403 && attempt === 0) {
+					try {
+						if (debugMode) {
+							executeFunctions.logger.debug('Running permission diagnostics for 403 error...');
+						}
+						const diagnostics = await this.diagnosePermissionIssues(executeFunctions);
+						if (diagnostics.length > 0) {
+							executeFunctions.logger.warn('Permission issue diagnostics:', {
+								issues: diagnostics,
+								context,
+							});
+						}
+					} catch (diagError) {
+						if (debugMode) {
+							executeFunctions.logger.debug('Diagnostics failed:', diagError);
+						}
+					}
+				}
+
+				// Check if we should retry
+				if (attempt < config.maxRetries && this.shouldRetry(error, attempt, config)) {
+					const delay = this.calculateDelay(attempt, config, error.retryAfter);
+
+					if (debugMode) {
+						executeFunctions.logger.debug(
+							`${context} - Waiting ${delay}ms before retry ${attempt + 1}...`
+						);
+					}
+
+					await this.sleep(delay);
+					continue;
+				}
+
+				// No more retries or non-retryable error
+				break;
 			}
 		}
 
-		// This should never be reached, but just in case
-		throw lastError;
+		// All retries exhausted, throw the parsed error
+		throw this.parseApiError(lastError, executeFunctions);
 	}
 
 	/**
 	 * Parse and categorize Google Ads API errors
 	 */
 	private parseApiError(error: any, executeFunctions: IExecuteFunctions): Error {
+		const debugMode = executeFunctions.getNodeParameter('debugMode', 0, false) as boolean;
 		const httpCode = error.httpCode || error.status || 0;
-		const message = error.message || 'Unknown error occurred';
-		const responseBody = error.response?.body || error.body;
 
-		// Log detailed error information to console for debugging
-		console.error('Google Ads API Error Details:', {
-			httpCode,
-			message,
-			responseBody: responseBody ? JSON.stringify(responseBody, null, 2) : undefined,
-			requestUrl: error.config?.url || error.url || 'Unknown URL',
-			requestMethod: error.config?.method || error.method || 'Unknown Method',
-			requestHeaders: error.config?.headers
-				? {
-						...error.config.headers,
-						'developer-token': error.config.headers['developer-token'] ? '***HIDDEN***' : 'MISSING',
-					}
-				: 'No headers available',
-			requestBody:
-				error.config?.data || error.config?.body
-					? JSON.stringify(error.config?.data || error.config?.body, null, 2)
-					: 'No request body available',
-			stack: error.stack,
-			fullError: error,
-		});
-
-		// Check for URL-related errors first
-		if (message.includes('ERR_INVALID_URL') || message.includes('Invalid URL')) {
-			executeFunctions.logger.error('URL validation error:', {
-				message,
+		if (debugMode) {
+			executeFunctions.logger.debug('Error details for parsing:', {
+				httpCode,
+				message: error.message,
+				responseBody: error.response?.data,
 				stack: error.stack,
 			});
-			return new GoogleAdsApiError(
-				executeFunctions.getNode(),
-				`Invalid URL: ${message}. Please check your customer ID format and ensure it contains only valid characters.`,
-				400,
-				'ERR_INVALID_URL'
-			);
 		}
 
-		// Log full error details in debug mode
-		executeFunctions.logger.debug('Google Ads API Error Details:', {
-			httpCode,
-			message,
-			responseBody,
-			stack: error.stack,
-		});
-
-		// Parse Google Ads specific error details if available
-		let apiErrorCode: string | undefined;
-		let detailedMessage = message;
-		let googleAdsErrors: any[] = [];
-
-		if (responseBody) {
-			try {
-				const errorData =
-					typeof responseBody === 'string' ? JSON.parse(responseBody) : responseBody;
-
-				console.error('Parsed Google Ads Error Response:', {
-					fullErrorData: errorData,
-					hasError: !!errorData.error,
-					hasDetails: !!errorData.error?.details,
-					errorStructure: errorData.error ? Object.keys(errorData.error) : 'No error object',
-				});
-
-				// Extract Google Ads error details
-				if (errorData.error) {
-					apiErrorCode = errorData.error.code || errorData.error.status;
-					detailedMessage = errorData.error.message || message;
-
-					// Handle Google Ads specific error details structure
-					if (errorData.error.details) {
-						const details = Array.isArray(errorData.error.details)
-							? errorData.error.details
-							: [errorData.error.details];
-
-						// Extract specific Google Ads errors
-						for (const detail of details) {
-							if (detail.errors && Array.isArray(detail.errors)) {
-								googleAdsErrors.push(...detail.errors);
-							} else if (detail.googleAdsFailure && detail.googleAdsFailure.errors) {
-								googleAdsErrors.push(...detail.googleAdsFailure.errors);
-							} else if (detail.message) {
-								googleAdsErrors.push({ message: detail.message });
-							}
-						}
-
-						if (googleAdsErrors.length > 0) {
-							const errorMessages = googleAdsErrors
-								.map((err: any) => {
-									let errorMsg = err.message || err.errorCode || 'Unknown error';
-									if (err.location && err.location.fieldPath) {
-										errorMsg += ` (Field: ${err.location.fieldPath})`;
-									}
-									if (err.trigger && err.trigger.stringValue) {
-										errorMsg += ` (Value: ${err.trigger.stringValue})`;
-									}
-									return errorMsg;
-								})
-								.join('; ');
-							detailedMessage = `${detailedMessage}. Specific errors: ${errorMessages}`;
-						} else {
-							const errorDetails = details
-								.map((detail: any) => detail.message || detail)
-								.join('; ');
-							detailedMessage += ` Details: ${errorDetails}`;
-						}
-					}
-				}
-
-				// Log structured Google Ads errors for debugging
-				if (googleAdsErrors.length > 0) {
-					console.error('Google Ads Specific Errors:', {
-						totalErrors: googleAdsErrors.length,
-						errors: googleAdsErrors.map((err: any) => ({
-							errorCode: err.errorCode,
-							message: err.message,
-							fieldPath: err.location?.fieldPath,
-							triggerValue: err.trigger?.stringValue,
-							fullError: err,
-						})),
-					});
-				}
-			} catch (parseError) {
-				executeFunctions.logger.debug('Failed to parse error response body:', parseError);
-				console.error('Failed to parse error response body:', parseError);
-				console.error('Raw response body that failed to parse:', responseBody);
+		try {
+			// Handle 403 Forbidden errors with detailed diagnostics
+			if (httpCode === 403) {
+				const errorMessage = this.buildDetailedAuthErrorMessage(error, executeFunctions);
+				return new GoogleAdsApiError(
+					executeFunctions.getNode(),
+					errorMessage,
+					httpCode,
+					'PERMISSION_DENIED'
+				);
 			}
-		}
 
-		// Categorize errors based on HTTP status codes
-		switch (httpCode) {
-			case 400:
-				// Provide more specific guidance for 400 errors
-				let validationMessage = `Invalid request parameters. ${detailedMessage}`;
-
-				if (googleAdsErrors.length > 0) {
-					// Check for common error patterns and provide specific guidance
-					const fieldErrors = googleAdsErrors.filter((err) => err.location?.fieldPath);
-					if (fieldErrors.length > 0) {
-						const fieldsWithErrors = fieldErrors.map((err) => err.location.fieldPath).join(', ');
-						validationMessage += ` Check these fields: ${fieldsWithErrors}`;
-					}
-
-					// Check for conversion action errors
-					const conversionActionErrors = googleAdsErrors.filter(
-						(err) =>
-							err.message?.includes('conversion_action') ||
-							err.location?.fieldPath?.includes('conversion_action')
-					);
-					if (conversionActionErrors.length > 0) {
-						validationMessage += ` Verify your conversion action ID is correct and accessible.`;
-					}
-
-					// Check for customer ID errors
-					const customerIdErrors = googleAdsErrors.filter(
-						(err) => err.message?.includes('customer') || err.message?.includes('login-customer-id')
-					);
-					if (customerIdErrors.length > 0) {
-						validationMessage += ` Verify your customer ID and login-customer-id settings.`;
-					}
-				} else {
-					validationMessage += ` Please check your conversion data, identifiers, customer ID, and conversion action format.`;
-				}
-
-				return new GoogleAdsValidationError(executeFunctions.getNode(), validationMessage);
-
-			case 401:
+			// Handle 401 Unauthorized errors
+			if (httpCode === 401) {
 				return new GoogleAdsAuthenticationError(
 					executeFunctions.getNode(),
-					`Authentication failed. ${detailedMessage}. Please verify your OAuth2 credentials and developer token.`
+					'Authentication failed. Please re-authenticate your Google Ads OAuth2 credentials. The access token may have expired or been revoked.'
 				);
+			}
 
-			case 403:
-				// Add basic permission guidance for 403 errors
-				let permissionMessage = `Access denied. ${detailedMessage}. Please verify your developer token permissions and customer ID access.`;
+			// Handle 400 Bad Request errors
+			if (httpCode === 400) {
+				let errorMessage = 'Bad request to Google Ads API';
+				const responseBody = error.response?.data;
 
-				// Add basic guidance based on common 403 issues
-				permissionMessage += `\n\nCommon causes:\n• Account Type mismatch (check if you should use "Manager Account" vs "Regular Account")\n• Developer token lacks access to the target customer ID\n• OAuth credentials don't have proper scopes or permissions\n• Customer ID is incorrect or inaccessible\n• Conversion action belongs to a different account`;
+				if (responseBody && responseBody.error) {
+					if (responseBody.error.message) {
+						errorMessage = `Google Ads API Error: ${responseBody.error.message}`;
+					}
 
-				console.error('Google Ads 403 Error - Permission Denied:', {
-					detailedMessage,
-					guidance: 'Check account type configuration and developer token permissions',
-				});
+					if (responseBody.error.details) {
+						for (const detail of responseBody.error.details) {
+							if (detail.errors) {
+								for (const err of detail.errors) {
+									if (err.message) {
+										errorMessage += ` | ${err.message}`;
+									}
+								}
+							}
+						}
+					}
+				}
 
-				return new GoogleAdsAuthenticationError(executeFunctions.getNode(), permissionMessage);
+				return new GoogleAdsValidationError(executeFunctions.getNode(), errorMessage);
+			}
 
-			case 404:
-				return new GoogleAdsValidationError(
-					executeFunctions.getNode(),
-					`Resource not found. ${detailedMessage}. Please check your conversion action ID and customer ID.`
-				);
-
-			case 429:
-				// Extract retry-after header if available
-				const retryAfter = error.response?.headers?.['retry-after']
-					? parseInt(error.response.headers['retry-after'])
-					: undefined;
-
+			// Handle rate limiting errors
+			if (httpCode === 429) {
+				const retryAfter = error.response?.headers?.['retry-after'];
 				return new GoogleAdsRateLimitError(
 					executeFunctions.getNode(),
-					`Rate limit exceeded. ${detailedMessage}. Please implement retry logic or reduce request frequency.`,
-					retryAfter
+					'Rate limit exceeded. Please slow down your requests.',
+					retryAfter ? parseInt(retryAfter) : undefined
 				);
+			}
 
-			case 500:
-			case 502:
-			case 503:
-			case 504:
+			// Handle server errors
+			if (httpCode >= 500) {
 				return new GoogleAdsApiError(
 					executeFunctions.getNode(),
-					`Google Ads API server error (${httpCode}). ${detailedMessage}. Please try again later.`,
+					`Google Ads API server error (${httpCode}). Please try again later.`,
 					httpCode,
-					apiErrorCode
+					'SERVER_ERROR'
 				);
+			}
 
-			default:
-				return new GoogleAdsApiError(
-					executeFunctions.getNode(),
-					`Unexpected error (${httpCode}): ${detailedMessage}`,
-					httpCode,
-					apiErrorCode
+			// Generic error handling
+			const message = error.message || 'Unknown Google Ads API error';
+			return new GoogleAdsApiError(
+				executeFunctions.getNode(),
+				`Google Ads API Error: ${message}`,
+				httpCode,
+				'UNKNOWN'
+			);
+		} catch (parseError) {
+			if (debugMode) {
+				executeFunctions.logger.error('Error parsing API error:', parseError);
+			}
+			return new GoogleAdsApiError(
+				executeFunctions.getNode(),
+				`Google Ads API Error: Unexpected error (${httpCode}): ${error.message || 'Unknown error'}`,
+				httpCode,
+				'PARSE_ERROR'
+			);
+		}
+	}
+
+	/**
+	 * Build detailed error message for 403 authentication errors
+	 */
+	private buildDetailedAuthErrorMessage(error: any, executeFunctions: IExecuteFunctions): string {
+		const baseMessage =
+			'Access denied to Google Ads API. This is typically a permissions or authentication issue.';
+		const suggestions: string[] = [];
+
+		try {
+			// Get current configuration for diagnostics
+			const accountType = executeFunctions.getNodeParameter('accountType', 0, 'regular') as string;
+
+			suggestions.push('**Common Solutions:**');
+			suggestions.push(
+				'1. **Re-authenticate**: Your OAuth2 token may have expired. Reconnect your Google Ads credentials in n8n.'
+			);
+			suggestions.push(
+				'2. **Check Developer Token**: Ensure your Google Ads Developer Token is valid and approved for production use.'
+			);
+			suggestions.push(
+				'3. **Verify Account Access**: Make sure the authenticated Google account has access to the target Google Ads account.'
+			);
+
+			if (accountType === 'manager') {
+				suggestions.push('4. **Manager Account Setup**: For manager accounts, ensure:');
+				suggestions.push('   - The authenticated account is the manager account');
+				suggestions.push('   - The selected managed account exists and is accessible');
+				suggestions.push('   - The manager account has proper permissions to the managed account');
+			} else {
+				suggestions.push(
+					'4. **Account Type**: If you\'re using a manager account, change the account type to "Manager Account (MCC)".'
 				);
+			}
+
+			suggestions.push(
+				'5. **API Access**: Verify that your Google Cloud project has the Google Ads API enabled.'
+			);
+			suggestions.push(
+				'6. **Billing**: Ensure your Google Ads account has active billing if required.'
+			);
+
+			suggestions.push('\n**Debugging Steps:**');
+			suggestions.push('- Enable debug mode to see detailed request information');
+			suggestions.push(
+				'- Check the Google Ads account ID in your credentials matches the target account'
+			);
+			suggestions.push('- Test with a simple query first before uploading conversions');
+
+			return `${baseMessage}\n\n${suggestions.join('\n')}`;
+		} catch (buildError) {
+			return `${baseMessage}\n\nPlease check your Google Ads credentials and account permissions. Enable debug mode for more details.`;
 		}
 	}
 
@@ -1560,6 +1484,7 @@ export class GoogleAdsConversion implements INodeType {
 		// Construct and validate the URL
 		const apiEndpoint = `/customers/${customerId}/googleAds:search`;
 		const baseUrl = 'https://googleads.googleapis.com/v17';
+		const fullUrl = `${baseUrl}${apiEndpoint}`;
 
 		// Validate URL before making the request
 		if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
@@ -1571,12 +1496,36 @@ export class GoogleAdsConversion implements INodeType {
 			);
 		}
 
+		// Validate required headers
+		if (!headers['developer-token']) {
+			throw new GoogleAdsAuthenticationError(
+				executeFunctions.getNode(),
+				'Developer token is missing. Please ensure your Google Ads credentials include a valid developer token.'
+			);
+		}
+
+		if (!headers['login-customer-id']) {
+			throw new GoogleAdsAuthenticationError(
+				executeFunctions.getNode(),
+				'Login customer ID is missing. Please ensure your Google Ads credentials include a valid customer ID.'
+			);
+		}
+
+		if (debugMode) {
+			executeFunctions.logger.debug('Validating credentials with test query', {
+				customerId,
+				url: fullUrl,
+				hasDevToken: !!headers['developer-token'],
+				hasLoginCustomerId: !!headers['login-customer-id'],
+			});
+		}
+
 		await this.executeWithRetry(
 			executeFunctions,
 			async () => {
 				// Simple test query to validate credentials
 				const testPayload = {
-					query: 'SELECT customer.id FROM customer LIMIT 1',
+					query: 'SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1',
 				};
 
 				const response = await executeFunctions.helpers.httpRequestWithAuthentication.call(
@@ -1584,14 +1533,20 @@ export class GoogleAdsConversion implements INodeType {
 					'googleAdsOAuth2',
 					{
 						method: 'POST',
-						url: apiEndpoint,
+						url: fullUrl,
 						body: testPayload,
-						headers,
-						// Add timeout and error handling options
-						timeout: 30000, // 30 seconds timeout
-						ignoreHttpStatusErrors: false, // Don't ignore HTTP errors
+						headers: headers,
+						timeout: 30000,
+						ignoreHttpStatusErrors: false,
 					}
 				);
+
+				if (debugMode) {
+					executeFunctions.logger.debug('Credential validation successful', {
+						customerId,
+						customerName: response.results?.[0]?.customer?.descriptiveName,
+					});
+				}
 
 				// Test conversion action if provided
 				const conversionAction = executeFunctions.getNodeParameter(
@@ -2143,44 +2098,67 @@ export class GoogleAdsConversion implements INodeType {
 				const headers = await this.getAuthenticatedHeaders(executeFunctions);
 
 				// Log detailed request information for debugging
-				console.log('Google Ads API Request Debug:', {
-					url: fullUrl,
-					method: 'POST',
-					headers: {
-						...headers,
-						'developer-token': headers['developer-token'] ? '***HIDDEN***' : 'MISSING',
-					},
-					payload: JSON.stringify(requestPayload, null, 2),
-					customerId,
-					conversion: JSON.stringify(conversion, null, 2),
-					itemIndex: itemIndex + 1,
-				});
-
-				// Make the API call using the full URL
-				const response = await executeFunctions.helpers.httpRequestWithAuthentication.call(
-					executeFunctions,
-					'googleAdsOAuth2',
-					{
-						method: 'POST',
-						url: fullUrl,
-						body: requestPayload,
-						headers: headers,
-						timeout: 30000,
-						ignoreHttpStatusErrors: false,
-					}
-				);
-
 				if (debugMode) {
-					executeFunctions.logger.debug('Google Ads Conversion API Response:', { response });
+					console.log('Google Ads API Request Debug:', {
+						url: fullUrl,
+						method: 'POST',
+						headers: {
+							...headers,
+							'developer-token': headers['developer-token'] ? '***HIDDEN***' : 'MISSING',
+						},
+						payload: JSON.stringify(requestPayload, null, 2),
+						customerId,
+						conversion: JSON.stringify(conversion, null, 2),
+						itemIndex: itemIndex + 1,
+					});
 				}
 
-				console.log('Google Ads API Response Success:', {
-					status: 'success',
-					itemIndex: itemIndex + 1,
-					responseData: JSON.stringify(response, null, 2),
-				});
+				try {
+					// Make the API call using the full URL
+					const response = await executeFunctions.helpers.httpRequestWithAuthentication.call(
+						executeFunctions,
+						'googleAdsOAuth2',
+						{
+							method: 'POST',
+							url: fullUrl,
+							body: requestPayload,
+							headers: headers,
+							timeout: 30000,
+							ignoreHttpStatusErrors: false,
+						}
+					);
 
-				return response;
+					if (debugMode) {
+						executeFunctions.logger.debug('Google Ads Conversion API Response:', { response });
+					}
+
+					console.log('Google Ads API Response Success:', {
+						status: 'success',
+						itemIndex: itemIndex + 1,
+						responseData: JSON.stringify(response, null, 2),
+					});
+
+					return response;
+				} catch (apiError: any) {
+					// Enhanced error logging for 403 errors
+					if ((apiError.httpCode || apiError.status) === 403) {
+						console.error('Google Ads API 403 Error - Enhanced Debug Info:', {
+							url: fullUrl,
+							customerId,
+							itemIndex: itemIndex + 1,
+							requestPayload: JSON.stringify(requestPayload, null, 2),
+							headers: {
+								...headers,
+								'developer-token': headers['developer-token'] ? '***HIDDEN***' : 'MISSING',
+							},
+							errorMessage: apiError.message,
+							accountType: executeFunctions.getNodeParameter('accountType', 0, 'regular'),
+							conversionAction: conversion.conversionAction,
+						});
+					}
+
+					throw apiError;
+				}
 			},
 			`Conversion Upload (Item ${itemIndex + 1})`,
 			debugMode

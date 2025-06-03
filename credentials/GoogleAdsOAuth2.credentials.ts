@@ -132,10 +132,22 @@ export class GoogleAdsOAuth2 implements ICredentialType {
 			headers: {
 				'developer-token': '={{$credentials.developerToken}}',
 				'login-customer-id': '={{$credentials.customerId.replace(/\\D/g, "")}}',
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
 			},
 			body: {
-				query: 'SELECT customer.id FROM customer LIMIT 1',
+				query: 'SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1',
 			},
 		},
+		rules: [
+			{
+				type: 'responseSuccessBody',
+				properties: {
+					key: 'results',
+					value: [],
+					message: 'Credentials are valid and can access Google Ads account',
+				},
+			},
+		],
 	};
 }

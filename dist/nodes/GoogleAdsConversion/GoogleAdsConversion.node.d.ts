@@ -31,6 +31,10 @@ export declare class GoogleAdsConversion implements INodeType {
      */
     private parseApiError;
     /**
+     * Build detailed error message for 403 authentication errors
+     */
+    private buildDetailedAuthErrorMessage;
+    /**
      * Convert n8n DateTime objects or strings to ISO string format
      */
     private convertDateTimeToString;
