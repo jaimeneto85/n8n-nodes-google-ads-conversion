@@ -40,7 +40,7 @@ class GoogleAdsConversion {
             icon: 'file:googleAds.svg',
             group: ['output'],
             version: 1,
-            subtitle: '={{$parameter["operation"] + ": " + $parameter["conversionAction"]}}',
+            subtitle: '={{$parameter["operation"] + ": " + ($parameter["conversionAction"].value || "Not configured")}}',
             description: 'Send conversion events to Google Ads for campaign optimization',
             defaults: {
                 name: 'Google Ads Conversion',
@@ -157,13 +157,31 @@ class GoogleAdsConversion {
                     },
                 },
                 {
-                    displayName: 'Conversion Action ID',
+                    displayName: 'Conversion Action',
                     name: 'conversionAction',
-                    type: 'string',
+                    type: 'resourceLocator',
                     required: true,
-                    default: '',
-                    description: 'The conversion action resource name or ID from Google Ads',
-                    hint: 'Found in Google Ads under Tools & Settings > Conversions',
+                    default: { mode: 'list', value: '' },
+                    description: 'The conversion action from your Google Ads account',
+                    modes: [
+                        {
+                            displayName: 'From List',
+                            name: 'list',
+                            type: 'list',
+                            placeholder: 'Select a conversion action...',
+                            typeOptions: {
+                                searchListMethod: 'getConversionActions',
+                                searchable: true,
+                            },
+                        },
+                        {
+                            displayName: 'By ID',
+                            name: 'id',
+                            type: 'string',
+                            placeholder: 'customers/{customer_id}/conversionActions/{conversion_action_id}',
+                            hint: 'Enter the full resource name or just the conversion action ID',
+                        },
+                    ],
                     displayOptions: {
                         show: {
                             operation: ['uploadClickConversion'],
@@ -751,8 +769,112 @@ class GoogleAdsConversion {
                         throw new Error(`Failed to load managed accounts: ${errorMessage} (HTTP ${httpCode})`);
                     }
                 },
+                async getConversionActions() {
+                    try {
+                        console.log('getConversionActions: Starting request...');
+                        // Get credentials and developer token from authentication
+                        const credentials = await this.getCredentials('googleAdsOAuth2');
+                        if (!credentials) {
+                            console.error('getConversionActions: No credentials found');
+                            throw new Error('No credentials provided for Google Ads OAuth2');
+                        }
+                        const customerId = credentials.customerId;
+                        const developerToken = credentials.developerToken;
+                        console.log('getConversionActions: Credentials check:', {
+                            hasCustomerId: !!customerId,
+                            hasDeveloperToken: !!developerToken,
+                            customerIdLength: customerId?.length || 0,
+                        });
+                        if (!customerId) {
+                            console.error('getConversionActions: Customer ID is missing');
+                            throw new Error('Customer ID is required');
+                        }
+                        if (!developerToken) {
+                            console.error('getConversionActions: Developer token is missing');
+                            throw new Error('Developer token is required');
+                        }
+                        // Clean customer ID format (remove any dashes)
+                        const cleanCustomerId = customerId.replace(/-/g, '');
+                        // Prepare GAQL query to get conversion actions
+                        const query = `
+						SELECT 
+							conversion_action.id,
+							conversion_action.name,
+							conversion_action.type,
+							conversion_action.status,
+							conversion_action.category,
+							conversion_action.resource_name
+						FROM conversion_action 
+						WHERE conversion_action.status = 'ENABLED'
+						ORDER BY conversion_action.name
+					`;
+                        const requestBody = {
+                            query: query.trim(),
+                        };
+                        // Prepare headers
+                        const headers = {
+                            'developer-token': developerToken,
+                            'login-customer-id': cleanCustomerId,
+                            'Content-Type': 'application/json',
+                        };
+                        const url = `https://googleads.googleapis.com/v17/customers/${cleanCustomerId}/googleAds:search`;
+                        console.log('getConversionActions: Making API request to:', url);
+                        console.log('getConversionActions: Query:', query.trim());
+                        const response = await this.helpers.httpRequestWithAuthentication.call(this, 'googleAdsOAuth2', {
+                            method: 'POST',
+                            url,
+                            headers,
+                            body: requestBody,
+                        });
+                        console.log('getConversionActions: API response received');
+                        if (!response || !response.results) {
+                            console.log('getConversionActions: No results in response');
+                            return { results: [] };
+                        }
+                        const results = response.results.map((result) => {
+                            const conversionAction = result.conversionAction;
+                            return {
+                                name: `${conversionAction.name} (${conversionAction.type})`,
+                                value: conversionAction.resourceName,
+                                description: `Status: ${conversionAction.status} | Category: ${conversionAction.category} | ID: ${conversionAction.id}`,
+                            };
+                        });
+                        console.log('getConversionActions: Processed results:', results.length);
+                        return { results };
+                    }
+                    catch (error) {
+                        console.error('getConversionActions: Error occurred:', error);
+                        // Enhanced error handling
+                        const httpCode = error.httpCode || error.status || 0;
+                        let errorMessage = error.message || 'Unknown error';
+                        if (error.response?.data?.error?.message) {
+                            errorMessage = error.response.data.error.message;
+                        }
+                        console.error('getConversionActions: Error details:', {
+                            httpCode,
+                            errorMessage,
+                            responseData: error.response?.data,
+                        });
+                        throw new Error(`Failed to load conversion actions: ${errorMessage} (HTTP ${httpCode})`);
+                    }
+                },
             },
         };
+    }
+    /**
+     * Helper function to extract conversion action value from resourceLocator or string
+     */
+    getConversionActionValue(conversionActionParam) {
+        // Handle resourceLocator format (new)
+        if (conversionActionParam && typeof conversionActionParam === 'object' && conversionActionParam.value) {
+            return conversionActionParam.value;
+        }
+        // Handle legacy string format (backwards compatibility)
+        if (typeof conversionActionParam === 'string') {
+            return conversionActionParam;
+        }
+        // Return empty string if invalid format
+        return '';
     }
     /**
      * Sleep utility for retry delays
@@ -910,21 +1032,48 @@ class GoogleAdsConversion {
             if (httpCode === 400) {
                 let errorMessage = 'Bad request to Google Ads API';
                 const responseBody = error.response?.data;
+                if (debugMode) {
+                    executeFunctions.logger.debug('400 Error Response Body:', {
+                        responseBody,
+                        errorResponseData: error.response?.data,
+                        errorMessage: error.message,
+                        requestUrl: error.config?.url,
+                        requestData: error.config?.data
+                    });
+                }
                 if (responseBody && responseBody.error) {
                     if (responseBody.error.message) {
-                        errorMessage = `Google Ads API Error: ${responseBody.error.message}`;
+                        errorMessage = `${responseBody.error.message}`;
                     }
+                    // Extract detailed error information
+                    const errorDetails = [];
                     if (responseBody.error.details) {
                         for (const detail of responseBody.error.details) {
                             if (detail.errors) {
                                 for (const err of detail.errors) {
                                     if (err.message) {
-                                        errorMessage += ` | ${err.message}`;
+                                        errorDetails.push(err.message);
+                                    }
+                                    if (err.errorCode && err.errorCode.fieldError) {
+                                        errorDetails.push(`Field Error: ${err.errorCode.fieldError}`);
+                                    }
+                                    if (err.location && err.location.fieldPathElements) {
+                                        const fieldPath = err.location.fieldPathElements
+                                            .map((elem) => elem.fieldName)
+                                            .join('.');
+                                        errorDetails.push(`Field: ${fieldPath}`);
                                     }
                                 }
                             }
                         }
                     }
+                    if (errorDetails.length > 0) {
+                        errorMessage += ` | Details: ${errorDetails.join(' | ')}`;
+                    }
+                }
+                else {
+                    // Fallback if response body doesn't have expected structure
+                    errorMessage = `Bad request - please check your parameters. Response: ${JSON.stringify(responseBody)}`;
                 }
                 return new GoogleAdsValidationError(executeFunctions.getNode(), errorMessage);
             }
@@ -1099,7 +1248,8 @@ class GoogleAdsConversion {
      */
     validateInputParameters(executeFunctions, itemIndex) {
         const identificationMethod = executeFunctions.getNodeParameter('identificationMethod', itemIndex);
-        const conversionAction = executeFunctions.getNodeParameter('conversionAction', itemIndex);
+        const conversionActionParam = executeFunctions.getNodeParameter('conversionAction', itemIndex);
+        const conversionAction = this.getConversionActionValue(conversionActionParam);
         const conversionDateTimeRaw = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
         // Convert DateTime objects from n8n to string
         const conversionDateTime = this.convertDateTimeToString(conversionDateTimeRaw);
@@ -1269,7 +1419,8 @@ class GoogleAdsConversion {
                 });
             }
             // Test conversion action if provided
-            const conversionAction = executeFunctions.getNodeParameter('conversionAction', 0, '');
+            const conversionActionParam = executeFunctions.getNodeParameter('conversionAction', 0, '');
+            const conversionAction = this.getConversionActionValue(conversionActionParam);
             if (conversionAction && debugMode) {
                 // Extract conversion action ID from resource name or use as-is
                 let conversionActionId = conversionAction;
@@ -1408,7 +1559,8 @@ class GoogleAdsConversion {
      */
     async buildConversionPayload(executeFunctions, itemIndex) {
         const identificationMethod = executeFunctions.getNodeParameter('identificationMethod', itemIndex);
-        const conversionAction = executeFunctions.getNodeParameter('conversionAction', itemIndex);
+        const conversionActionParam = executeFunctions.getNodeParameter('conversionAction', itemIndex);
+        const conversionAction = this.getConversionActionValue(conversionActionParam);
         const conversionDateTimeRaw = executeFunctions.getNodeParameter('conversionDateTime', itemIndex);
         const conversionValue = executeFunctions.getNodeParameter('conversionValue', itemIndex, 0);
         const currencyCode = executeFunctions.getNodeParameter('currencyCode', itemIndex, 'USD');
@@ -2212,7 +2364,8 @@ class GoogleAdsConversion {
                 });
             }
             // Check conversion action format and accessibility
-            const conversionAction = executeFunctions.getNodeParameter('conversionAction', 0);
+            const conversionActionParam = executeFunctions.getNodeParameter('conversionAction', 0);
+            const conversionAction = this.getConversionActionValue(conversionActionParam);
             if (conversionAction) {
                 if (conversionAction.startsWith('customers/')) {
                     const actionMatch = conversionAction.match(/customers\/(\d+)\/conversionActions\/(\w+)/);

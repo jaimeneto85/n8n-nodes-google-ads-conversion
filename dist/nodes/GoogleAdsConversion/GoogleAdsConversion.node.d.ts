@@ -4,8 +4,13 @@ export declare class GoogleAdsConversion implements INodeType {
     methods: {
         listSearch: {
             getManagedAccounts(this: ILoadOptionsFunctions): Promise<INodeListSearchResult>;
+            getConversionActions(this: ILoadOptionsFunctions): Promise<INodeListSearchResult>;
         };
     };
+    /**
+     * Helper function to extract conversion action value from resourceLocator or string
+     */
+    private getConversionActionValue;
     /**
      * Sleep utility for retry delays
      */
