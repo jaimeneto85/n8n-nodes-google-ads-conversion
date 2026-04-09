@@ -122,7 +122,7 @@ function validatePackageStructure() {
     
     const checks = [
         { 
-            condition: packageData.name === '@jaimeneto85/n8n-nodes-google-ads-conversion',
+            condition: packageData.name === '@jaimeflneto/n8n-nodes-google-ads-conversion',
             message: 'Package name'
         },
         {
