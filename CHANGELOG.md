@@ -5,6 +5,16 @@ All notable changes to the Google Ads Conversion Node project will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-04-09
+### Changed
+- Upgraded Google Ads REST API target from v17 to v23. v17 was sunset in June 2025, so any call from the previous version would fail in production. v23 is the latest stable version (released 2026-01-28, sunset scheduled for February 2027).
+- Extracted the API version to a single `GOOGLE_ADS_API_VERSION` constant (plus derived `GOOGLE_ADS_API_BASE_URL`) in both `nodes/GoogleAdsConversion/GoogleAdsConversion.node.ts` and `credentials/GoogleAdsOAuth2.credentials.ts`, eliminating the 10 hardcoded duplicates that previously made upgrades error-prone.
+- Updated developer guide and OAuth scopes documentation to reflect the new API version.
+
+### Notes
+- No breaking changes to the node's public interface. The `ClickConversion`, `UserIdentifier`, `Consent`, `uploadClickConversions`, and `googleAds:search` schemas used by this node are unchanged between v17 and v23 for the fields in use. Workflows using this node do not need to be reconfigured.
+- Sources: https://developers.google.com/google-ads/api/docs/release-notes and https://developers.google.com/google-ads/api/docs/sunset-dates
+
 ## [0.8.1] - 2024-06-02
 ### Fixed
 - Fixed 403 Forbidden errors by improving login-customer-id handling and validation
