@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GoogleAdsOAuth2 = void 0;
+const GOOGLE_ADS_API_VERSION = 'v23';
+const GOOGLE_ADS_API_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 class GoogleAdsOAuth2 {
     constructor() {
         this.name = 'googleAdsOAuth2';
@@ -119,7 +121,7 @@ class GoogleAdsOAuth2 {
         };
         this.test = {
             request: {
-                baseURL: 'https://googleads.googleapis.com/v17',
+                baseURL: GOOGLE_ADS_API_BASE_URL,
                 url: '/customers/{{$credentials.customerId.replace(/\\D/g, "")}}/googleAds:search',
                 method: 'POST',
                 headers: {

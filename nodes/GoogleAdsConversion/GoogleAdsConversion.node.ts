@@ -10,6 +10,9 @@ import {
 } from 'n8n-workflow';
 import { createHash } from 'crypto';
 
+const GOOGLE_ADS_API_VERSION = 'v23';
+const GOOGLE_ADS_API_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
+
 // Custom error classes for better error categorization
 class GoogleAdsAuthenticationError extends NodeOperationError {
 	constructor(node: any, message: string) {
@@ -71,7 +74,7 @@ export class GoogleAdsConversion implements INodeType {
 			},
 		],
 		requestDefaults: {
-			baseURL: 'https://googleads.googleapis.com/v17',
+			baseURL: GOOGLE_ADS_API_BASE_URL,
 			headers: {
 				Accept: 'application/json',
 				'Content-Type': 'application/json',
@@ -728,7 +731,7 @@ export class GoogleAdsConversion implements INodeType {
 					}
 
 					const apiUrl = `/customers/${sanitizedManagerId}/googleAds:search`;
-					const baseUrl = 'https://googleads.googleapis.com/v17';
+					const baseUrl = GOOGLE_ADS_API_BASE_URL;
 
 					const requestHeaders = {
 						'developer-token': developerToken,
@@ -878,7 +881,7 @@ export class GoogleAdsConversion implements INodeType {
 						'Content-Type': 'application/json',
 					};
 
-					const url = `https://googleads.googleapis.com/v17/customers/${cleanCustomerId}/googleAds:search`;
+					const url = `${GOOGLE_ADS_API_BASE_URL}/customers/${cleanCustomerId}/googleAds:search`;
 
 					console.log('getConversionActions: Making API request to:', url);
 					console.log('getConversionActions: Query:', query.trim());
@@ -1663,7 +1666,7 @@ export class GoogleAdsConversion implements INodeType {
 
 		// Construct and validate the URL
 		const apiEndpoint = `/customers/${customerId}/googleAds:search`;
-		const baseUrl = 'https://googleads.googleapis.com/v17';
+		const baseUrl = GOOGLE_ADS_API_BASE_URL;
 		const fullUrl = `${baseUrl}${apiEndpoint}`;
 
 		// Validate URL before making the request
@@ -2234,7 +2237,7 @@ export class GoogleAdsConversion implements INodeType {
 		}
 
 		// Construct the full URL properly with query parameters
-		const baseUrl = 'https://googleads.googleapis.com/v17';
+		const baseUrl = GOOGLE_ADS_API_BASE_URL;
 		const apiPath = `/customers/${customerId}:uploadClickConversions`;
 		const queryParams = new URLSearchParams();
 		queryParams.append('partial_failure', 'true');
@@ -2404,7 +2407,7 @@ export class GoogleAdsConversion implements INodeType {
 		}
 
 		// Construct the full URL properly with query parameters
-		const baseUrl = 'https://googleads.googleapis.com/v17';
+		const baseUrl = GOOGLE_ADS_API_BASE_URL;
 		const apiPath = `/customers/${customerId}:uploadClickConversions`;
 		const queryParams = new URLSearchParams();
 		if (batchProcessingMode === 'partialFailure') {
@@ -2999,7 +3002,7 @@ export class GoogleAdsConversion implements INodeType {
 
 			// Test basic API access
 			const headers = await this.getAuthenticatedHeaders(executeFunctions);
-			const testUrl = `https://googleads.googleapis.com/v17/customers/${sanitizedTargetId}/googleAds:search`;
+			const testUrl = `${GOOGLE_ADS_API_BASE_URL}/customers/${sanitizedTargetId}/googleAds:search`;
 
 			try {
 				const testPayload = {
@@ -3088,7 +3091,7 @@ export class GoogleAdsConversion implements INodeType {
 	): Promise<boolean> {
 		try {
 			const headers = await this.getAuthenticatedHeaders(executeFunctions);
-			const testUrl = `https://googleads.googleapis.com/v17/customers/${customerId}/googleAds:search`;
+			const testUrl = `${GOOGLE_ADS_API_BASE_URL}/customers/${customerId}/googleAds:search`;
 
 			const testPayload = {
 				query: `SELECT conversion_action.id, conversion_action.name, conversion_action.status, conversion_action.type FROM conversion_action WHERE conversion_action.id = ${conversionActionId}`,

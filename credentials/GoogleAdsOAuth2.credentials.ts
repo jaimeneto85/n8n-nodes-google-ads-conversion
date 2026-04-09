@@ -5,6 +5,9 @@ import {
 	INodeProperties,
 } from 'n8n-workflow';
 
+const GOOGLE_ADS_API_VERSION = 'v23';
+const GOOGLE_ADS_API_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
+
 export class GoogleAdsOAuth2 implements ICredentialType {
 	name = 'googleAdsOAuth2';
 	extends = ['oAuth2Api'];
@@ -126,7 +129,7 @@ export class GoogleAdsOAuth2 implements ICredentialType {
 
 	test: ICredentialTestRequest = {
 		request: {
-			baseURL: 'https://googleads.googleapis.com/v17',
+			baseURL: GOOGLE_ADS_API_BASE_URL,
 			url: '/customers/{{$credentials.customerId.replace(/\\D/g, "")}}/googleAds:search',
 			method: 'POST',
 			headers: {

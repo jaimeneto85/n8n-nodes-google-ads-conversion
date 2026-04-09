@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GoogleAdsConversion = void 0;
 const n8n_workflow_1 = require("n8n-workflow");
 const crypto_1 = require("crypto");
+const GOOGLE_ADS_API_VERSION = 'v23';
+const GOOGLE_ADS_API_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 // Custom error classes for better error categorization
 class GoogleAdsAuthenticationError extends n8n_workflow_1.NodeOperationError {
     constructor(node, message) {
@@ -56,7 +58,7 @@ class GoogleAdsConversion {
                 },
             ],
             requestDefaults: {
-                baseURL: 'https://googleads.googleapis.com/v17',
+                baseURL: GOOGLE_ADS_API_BASE_URL,
                 headers: {
                     Accept: 'application/json',
                     'Content-Type': 'application/json',
@@ -694,7 +696,7 @@ class GoogleAdsConversion {
                             throw new Error('Customer ID must contain at least one digit');
                         }
                         const apiUrl = `/customers/${sanitizedManagerId}/googleAds:search`;
-                        const baseUrl = 'https://googleads.googleapis.com/v17';
+                        const baseUrl = GOOGLE_ADS_API_BASE_URL;
                         const requestHeaders = {
                             'developer-token': developerToken,
                             'login-customer-id': sanitizedManagerId,
@@ -817,7 +819,7 @@ class GoogleAdsConversion {
                             'login-customer-id': cleanCustomerId,
                             'Content-Type': 'application/json',
                         };
-                        const url = `https://googleads.googleapis.com/v17/customers/${cleanCustomerId}/googleAds:search`;
+                        const url = `${GOOGLE_ADS_API_BASE_URL}/customers/${cleanCustomerId}/googleAds:search`;
                         console.log('getConversionActions: Making API request to:', url);
                         console.log('getConversionActions: Query:', query.trim());
                         const response = await this.helpers.httpRequestWithAuthentication.call(this, 'googleAdsOAuth2', {
@@ -1378,7 +1380,7 @@ class GoogleAdsConversion {
         }
         // Construct and validate the URL
         const apiEndpoint = `/customers/${customerId}/googleAds:search`;
-        const baseUrl = 'https://googleads.googleapis.com/v17';
+        const baseUrl = GOOGLE_ADS_API_BASE_URL;
         const fullUrl = `${baseUrl}${apiEndpoint}`;
         // Validate URL before making the request
         if (!this.validateUrl(baseUrl, apiEndpoint, executeFunctions)) {
@@ -1773,7 +1775,7 @@ class GoogleAdsConversion {
             throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid customer ID format: ${customerId}. Must contain only digits.`, 400, 'ERR_INVALID_CUSTOMER_ID');
         }
         // Construct the full URL properly with query parameters
-        const baseUrl = 'https://googleads.googleapis.com/v17';
+        const baseUrl = GOOGLE_ADS_API_BASE_URL;
         const apiPath = `/customers/${customerId}:uploadClickConversions`;
         const queryParams = new URLSearchParams();
         queryParams.append('partial_failure', 'true');
@@ -1897,7 +1899,7 @@ class GoogleAdsConversion {
             throw new GoogleAdsApiError(executeFunctions.getNode(), `Invalid customer ID format: ${customerId}. Must contain only digits.`, 400, 'ERR_INVALID_CUSTOMER_ID');
         }
         // Construct the full URL properly with query parameters
-        const baseUrl = 'https://googleads.googleapis.com/v17';
+        const baseUrl = GOOGLE_ADS_API_BASE_URL;
         const apiPath = `/customers/${customerId}:uploadClickConversions`;
         const queryParams = new URLSearchParams();
         if (batchProcessingMode === 'partialFailure') {
@@ -2329,7 +2331,7 @@ class GoogleAdsConversion {
             });
             // Test basic API access
             const headers = await this.getAuthenticatedHeaders(executeFunctions);
-            const testUrl = `https://googleads.googleapis.com/v17/customers/${sanitizedTargetId}/googleAds:search`;
+            const testUrl = `${GOOGLE_ADS_API_BASE_URL}/customers/${sanitizedTargetId}/googleAds:search`;
             try {
                 const testPayload = {
                     query: 'SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1',
@@ -2394,7 +2396,7 @@ class GoogleAdsConversion {
     async testConversionAction(executeFunctions, customerId, conversionActionId) {
         try {
             const headers = await this.getAuthenticatedHeaders(executeFunctions);
-            const testUrl = `https://googleads.googleapis.com/v17/customers/${customerId}/googleAds:search`;
+            const testUrl = `${GOOGLE_ADS_API_BASE_URL}/customers/${customerId}/googleAds:search`;
             const testPayload = {
                 query: `SELECT conversion_action.id, conversion_action.name, conversion_action.status, conversion_action.type FROM conversion_action WHERE conversion_action.id = ${conversionActionId}`,
             };
