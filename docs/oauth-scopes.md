@@ -57,7 +57,7 @@ If multiple scopes become necessary:
 
 ### Principle of Least Privilege
 - Current scope is comprehensive but Google-recommended for API access
-- Google Ads API doesn't offer granular scopes as of v14
+- Google Ads API doesn't offer granular scopes as of v23
 - Access control handled at Google Ads account level
 
 ### Token Security

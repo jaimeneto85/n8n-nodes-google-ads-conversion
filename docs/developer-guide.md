@@ -14,7 +14,7 @@
 
 ## Architecture Overview
 
-The Google Ads Conversion Node is built as a custom n8n node that integrates with the Google Ads API v14 to enable automated conversion tracking. The node follows n8n's architecture patterns and implements advanced features for production-grade usage.
+The Google Ads Conversion Node is built as a custom n8n node that integrates with the Google Ads REST API v23 to enable automated conversion tracking. The target API version is centralised in the `GOOGLE_ADS_API_VERSION` constant at the top of `nodes/GoogleAdsConversion/GoogleAdsConversion.node.ts` and mirrored in `credentials/GoogleAdsOAuth2.credentials.ts`. The node follows n8n's architecture patterns and implements advanced features for production-grade usage.
 
 ### Core Components
 
