@@ -56,7 +56,8 @@
 		"test": "node tests/run-tests.js",
 		"test:validation": "npm run test",
 		"validate": "npm run test && npm run build:force",
-		"package": "npm run clean && npm run build:force && npm pack"
+		"package": "npm run clean && npm run build:force && npm pack",
+		"prepublishOnly": "npm run clean && npm run validate"
 	},
 	"files": [
 		"dist/**/*",
