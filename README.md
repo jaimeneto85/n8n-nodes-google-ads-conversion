@@ -1,6 +1,7 @@
 # Google Ads Conversion Node for n8n
 
-[![npm version](https://badge.fury.io/js/%40jaimeneto85%2Fn8n-nodes-google-ads-conversion.svg)](https://badge.fury.io/js/%40jaimeneto85%2Fn8n-nodes-google-ads-conversion)
+[![npm version](https://img.shields.io/npm/v/@jaimeflneto/n8n-nodes-google-ads-conversion.svg)](https://www.npmjs.com/package/@jaimeflneto/n8n-nodes-google-ads-conversion)
+[![npm downloads](https://img.shields.io/npm/dm/@jaimeflneto/n8n-nodes-google-ads-conversion.svg)](https://www.npmjs.com/package/@jaimeflneto/n8n-nodes-google-ads-conversion)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![n8n Community Node](https://img.shields.io/badge/n8n-Community%20Node-orange)](https://n8n.io)
 
